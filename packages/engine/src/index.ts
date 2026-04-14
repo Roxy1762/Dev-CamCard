@@ -1,13 +1,16 @@
 /**
  * @dev-camcard/engine
  *
- * 规则引擎 — 纯函数包骨架。
+ * 规则引擎 — 纯函数包。
  *
- * 当前阶段：仅导出版本号与状态类型占位。
- * 后续（任务 3）将在此实现：
- *  - InternalMatchState 完整定义
- *  - draw / shuffle / endTurn / buy 纯函数
- *  - engine.reduce(state, command) → state 主入口
+ * 导出内容：
+ *  - 运行时类型：CardInstance、VenueState、InternalPlayerState、InternalMatchState、MarketLaneState
+ *  - 牌堆操作：shuffle、draw
+ *  - 回合操作：beginTurn、endTurn
+ *  - 市场操作：buyFromMarket、buyFixedSupply
+ *  - 状态投影：toPublicMatchView、toPrivatePlayerView
+ *  - 初始化：RulesetConfig、createMatchState
+ *  - 主入口：EngineConfig、reduce
  *
  * 设计约束（docs/non-negotiables.md）：
  *  - 所有规则处理必须为纯函数，不依赖外部 IO
@@ -15,29 +18,12 @@
  *  - 客户端只发送 Command，不发送结算结果
  */
 
-export const ENGINE_VERSION = "0.0.1";
+export const ENGINE_VERSION = "0.1.0";
 
-// ── 状态类型占位（后续拆为单独模块）────────────────────────────────────────────
-
-/**
- * 内部对局状态 — 仅服务端持有，禁止直接发送给客户端。
- * 参考 docs/technical-decisions.md：状态分层约定。
- */
-export interface InternalMatchState {
-  // TODO (任务 3)：实现完整状态结构
-  // 参考 docs/game-rules.md 基础参数
-}
-
-/**
- * 公开视图 — 双方均可见的信息。
- */
-export interface PublicMatchView {
-  // TODO (任务 3)：实现
-}
-
-/**
- * 私有玩家视图 — 单方私有信息（如手牌）。
- */
-export interface PrivatePlayerView {
-  // TODO (任务 3)：实现
-}
+export * from "./types";
+export * from "./deck";
+export * from "./turn";
+export * from "./market";
+export * from "./projections";
+export * from "./init";
+export * from "./reduce";

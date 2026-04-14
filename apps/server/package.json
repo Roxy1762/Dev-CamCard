@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@colyseus/schema": "^2.0.30",
+    "@dev-camcard/engine": "workspace:*",
     "@dev-camcard/protocol": "workspace:*",
     "colyseus": "^0.15.17",
     "cors": "^2.8.5",

@@ -60,6 +60,9 @@ importers:
       '@colyseus/schema':
         specifier: ^2.0.30
         version: 2.0.37
+      '@dev-camcard/engine':
+        specifier: workspace:*
+        version: link:../../packages/engine
       '@dev-camcard/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -90,6 +93,10 @@ importers:
         version: 5.9.3
 
   packages/engine:
+    dependencies:
+      '@dev-camcard/protocol':
+        specifier: workspace:*
+        version: link:../protocol
     devDependencies:
       '@types/node':
         specifier: ^20.12.0

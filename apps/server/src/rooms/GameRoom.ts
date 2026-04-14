@@ -1,101 +1,129 @@
 import { Room, Client } from "colyseus";
-import type {
-  PublicMatchView,
-  PublicPlayerSummary,
-  MarketLane,
-} from "@dev-camcard/protocol";
+import * as fs from "fs";
+import * as path from "path";
 import { EVT } from "@dev-camcard/protocol";
+import type { ClientCommand, PlayerSide } from "@dev-camcard/protocol";
+import {
+  createMatchState,
+  reduce,
+  toPublicMatchView,
+  toPrivatePlayerView,
+} from "@dev-camcard/engine";
+import type { InternalMatchState, RulesetConfig, EngineConfig } from "@dev-camcard/engine";
+
+// ── 数据加载（模块级，仅执行一次）────────────────────────────────────────────
+
+// __dirname 在 dev (tsx) 和 prod (dist/) 下均指向 src/rooms 或 dist/rooms，
+// 均距项目根目录 4 层，所以统一用 "../../../../data"。
+const DATA_ROOT = path.resolve(__dirname, "../../../../data");
+
+function loadJson<T>(relativePath: string): T {
+  const fullPath = path.join(DATA_ROOT, relativePath);
+  return JSON.parse(fs.readFileSync(fullPath, "utf-8")) as T;
+}
+
+interface CardDef {
+  id: string;
+  cost: number;
+}
+
+const starterCards: CardDef[] = loadJson("cards/starter.json");
+const supplyCards: CardDef[] = loadJson("cards/fixed-supplies.json");
+const ruleset: RulesetConfig = loadJson("rulesets/core-v1.json");
+
+// cardId → cost 查找表
+const costMap = new Map<string, number>();
+for (const c of [...starterCards, ...supplyCards]) {
+  costMap.set(c.id, c.cost);
+}
+
+const ENGINE_CONFIG: EngineConfig = {
+  ruleset,
+  getCardCost: (cardId) => costMap.get(cardId) ?? 0,
+};
+
+// ── GameRoom ──────────────────────────────────────────────────────────────────
 
 /**
- * GameRoom — Colyseus 房间骨架（含 mock 公共状态）
+ * GameRoom — Colyseus 房间，接入真实规则引擎。
  *
- * 当前阶段：
- *  - 维护极简 mock PublicMatchView，无真实规则逻辑
- *  - 玩家加入时发送当前状态快照
+ * 状态分层（docs/technical-decisions.md）：
+ *  - InternalMatchState  服务端持有，禁止直接发送给客户端
+ *  - PublicMatchView     广播给全部客户端
+ *  - PrivatePlayerView   仅发给对应席位
  *
- * 后续接入路径（任务 3 → 正式轮次）：
- *  1. 引入 packages/engine 规则引擎（纯函数 reduce）
- *  2. 用 @colyseus/schema 定义 Schema 类，替换 JSON 广播
- *  3. 接收 ClientCommand（packages/protocol），驱动 engine.reduce
- *
- * 参考 docs/technical-decisions.md：状态分层约定。
+ * 客户端通过发送 ClientCommand（CMD.*）驱动 engine.reduce。
  */
 export class GameRoom extends Room {
   maxClients = 2;
 
-  private view!: PublicMatchView;
+  private matchState!: InternalMatchState;
+  /** sessionId → 席位 */
+  private sideMap = new Map<string, PlayerSide>();
 
   onCreate(_options: unknown): void {
-    this.view = buildMockView(this.roomId);
+    this.matchState = createMatchState(this.roomId, ruleset, ["玩家一", "玩家二"]);
+
+    // 统一消息处理器：客户端发 { type: CMD.*, ...payload }
+    this.onMessage("*", (client: Client, type: string | number, message: unknown) => {
+      const side = this.sideMap.get(client.sessionId);
+      if (side === undefined) return;
+
+      const command = { type: String(type), ...(message as object) } as ClientCommand;
+
+      try {
+        this.matchState = reduce(this.matchState, side, command, ENGINE_CONFIG);
+        this.broadcastState();
+      } catch (err) {
+        client.send("error", { message: (err as Error).message });
+      }
+    });
+
     console.log(`[GameRoom] 房间已创建: ${this.roomId}`);
   }
 
   onJoin(client: Client, options: unknown): void {
     const opts = (options ?? {}) as { playerName?: string };
-    const side = this.clients.length - 1 as 0 | 1;
+    const side = (this.clients.length - 1) as PlayerSide;
+    this.sideMap.set(client.sessionId, side);
 
-    // 更新对应席位的玩家名称
+    // 更新席位玩家名称
     if (side === 0 || side === 1) {
-      this.view.players[side].name = opts.playerName ?? `玩家${side + 1}`;
+      const players = this.matchState.players.map((p, i) =>
+        i === side ? { ...p, name: opts.playerName ?? `玩家${side + 1}` } : p
+      ) as [typeof this.matchState.players[0], typeof this.matchState.players[1]];
+      this.matchState = { ...this.matchState, players };
     }
 
     console.log(`[GameRoom] 玩家加入: ${client.sessionId} (side=${side})`);
 
-    // 向刚加入的客户端发送当前状态快照
-    client.send(EVT.STATE_UPDATE, this.view);
+    // 向新加入的客户端发送当前快照
+    client.send(EVT.STATE_UPDATE, toPublicMatchView(this.matchState));
+    if (side === 0 || side === 1) {
+      client.send(EVT.PRIVATE_UPDATE, toPrivatePlayerView(this.matchState, side));
+    }
   }
 
   onLeave(client: Client, _graceful: boolean): void {
+    this.sideMap.delete(client.sessionId);
     console.log(`[GameRoom] 玩家离开: ${client.sessionId}`);
   }
 
   onDispose(): void {
     console.log(`[GameRoom] 房间销毁: ${this.roomId}`);
   }
-}
 
-// ── Mock 状态构造 ──────────────────────────────────────────────────────────────
+  // ── 私有辅助 ────────────────────────────────────────────────────────────────
 
-function makeMockPlayer(side: 0 | 1, name: string): PublicPlayerSummary {
-  return {
-    side,
-    name,
-    hp: 32,          // game-rules.md: 生命值 32
-    block: 0,
-    deckSize: 12,    // game-rules.md: 起始套牌 12
-    handSize: 0,
-    discardSize: 0,
-    resourcePool: 0,
-    attackPool: 0,
-    venues: [],
-    scheduleSlots: [null, null], // game-rules.md: 日程槽 2
-    reservedCard: null,           // game-rules.md: 预约位 1
-  };
-}
+  private broadcastState(): void {
+    const publicView = toPublicMatchView(this.matchState);
+    this.broadcast(EVT.STATE_UPDATE, publicView);
 
-function buildMockView(roomId: string): PublicMatchView {
-  const market: MarketLane[] = [
-    { lane: "course", slots: [null, null] },
-    { lane: "activity", slots: [null, null] },
-    { lane: "daily", slots: [null, null] },
-  ];
-
-  return {
-    roomId,
-    turnNumber: 0,
-    activePlayer: 0,
-    players: [
-      makeMockPlayer(0, "玩家一"),
-      makeMockPlayer(1, "玩家二"),
-    ],
-    market,
-    fixedSupplies: [
-      "supply_errand_runner",
-      "supply_milk_bread",
-      "supply_print_materials",
-    ],
-    started: false,
-    ended: false,
-    winner: null,
-  };
+    for (const client of this.clients) {
+      const side = this.sideMap.get(client.sessionId);
+      if (side === 0 || side === 1) {
+        client.send(EVT.PRIVATE_UPDATE, toPrivatePlayerView(this.matchState, side));
+      }
+    }
+  }
 }

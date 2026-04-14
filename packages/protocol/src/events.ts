@@ -22,6 +22,8 @@ export const EVT = {
   MATCH_ENDED: "MATCH_ENDED",
   /** Colyseus 消息 key：服务端推送 PublicMatchView */
   STATE_UPDATE: "state_update",
+  /** Colyseus 消息 key：服务端推送 PrivatePlayerView（仅发给对应席位） */
+  PRIVATE_UPDATE: "private_update",
 } as const;
 
 export type EvtKey = (typeof EVT)[keyof typeof EVT];
