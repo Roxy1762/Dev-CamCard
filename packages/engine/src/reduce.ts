@@ -2,6 +2,8 @@ import type { ClientCommand, PlayerSide } from "@dev-camcard/protocol";
 import { CMD } from "@dev-camcard/protocol";
 import type { InternalMatchState, InternalPlayerState } from "./types";
 import type { RulesetConfig } from "./init";
+import type { CardDef } from "./effects";
+import { applyEffects } from "./effects";
 import { draw, shuffle } from "./deck";
 import { endTurn } from "./turn";
 import { buyFromMarket, buyFixedSupply } from "./market";
@@ -13,6 +15,8 @@ export interface EngineConfig {
   ruleset: RulesetConfig;
   /** 按 cardId 查询购买费用，用于 BUY 命令 */
   getCardCost: (cardId: string) => number;
+  /** 按 cardId 查询卡牌效果定义，用于 PLAY_CARD */
+  getCardDef: (cardId: string) => CardDef | undefined;
 }
 
 /**
@@ -20,9 +24,6 @@ export interface EngineConfig {
  *
  * 接收当前内部状态 + 发令席位 + 客户端命令，返回新状态。
  * 非法操作抛出 Error（由调用方捕获后回复错误消息）。
- *
- * MVP 实现范围：READY / END_TURN / BUY_MARKET_CARD / BUY_FIXED_SUPPLY / CONCEDE。
- * 其余命令（PLAY_CARD 等）暂时返回原状态，不抛出异常。
  *
  * @param state    当前内部对局状态
  * @param side     发出命令的玩家席位
@@ -42,6 +43,16 @@ export function reduce(
   switch (command.type) {
     case CMD.READY:
       return handleReady(state, side, config.ruleset, random);
+
+    case CMD.PLAY_CARD:
+      assertActive(state, side);
+      assertStarted(state);
+      return handlePlayCard(state, side, command.instanceId, config, random);
+
+    case CMD.ASSIGN_ATTACK:
+      assertActive(state, side);
+      assertStarted(state);
+      return handleAssignAttack(state, side, command.assignments);
 
     case CMD.END_TURN:
       assertActive(state, side);
@@ -76,16 +87,127 @@ export function reduce(
       };
 
     default:
-      // 未实现的命令（PLAY_CARD、ACTIVATE_VENUE 等）暂时为 no-op
+      // 未实现的命令（ACTIVATE_VENUE 等）暂时为 no-op
       return state;
   }
+}
+
+// ── PLAY_CARD ─────────────────────────────────────────────────────────────────
+
+function handlePlayCard(
+  state: InternalMatchState,
+  side: PlayerSide,
+  instanceId: string,
+  config: EngineConfig,
+  random: () => number
+): InternalMatchState {
+  const player = state.players[side];
+  const cardIdx = player.hand.findIndex((c) => c.instanceId === instanceId);
+
+  if (cardIdx === -1) {
+    throw new Error(`手牌中未找到卡牌实例: ${instanceId}`);
+  }
+
+  const card = player.hand[cardIdx];
+  const cardDef = config.getCardDef(card.cardId);
+
+  if (!cardDef) {
+    throw new Error(`未找到卡牌定义: ${card.cardId}`);
+  }
+
+  // 将卡牌从手牌移至 played 区
+  const newHand = player.hand.filter((_, i) => i !== cardIdx);
+  let updatedPlayer: InternalPlayerState = {
+    ...player,
+    hand: newHand,
+    played: [...player.played, card],
+  };
+
+  // 应用所有 onPlay 效果
+  for (const ability of cardDef.abilities) {
+    if (ability.trigger === "onPlay") {
+      updatedPlayer = applyEffects(
+        updatedPlayer,
+        ability.effects,
+        random,
+        config.ruleset.hp
+      );
+    }
+  }
+
+  const players = [state.players[0], state.players[1]] as [
+    InternalPlayerState,
+    InternalPlayerState,
+  ];
+  players[side] = updatedPlayer;
+
+  return { ...state, players };
+}
+
+// ── ASSIGN_ATTACK ─────────────────────────────────────────────────────────────
+
+function handleAssignAttack(
+  state: InternalMatchState,
+  side: PlayerSide,
+  assignments: import("@dev-camcard/protocol").AttackAssignment[]
+): InternalMatchState {
+  let s = state;
+
+  for (const assignment of assignments) {
+    // 本轮只支持攻击玩家，跳过场馆
+    if (assignment.target !== "player") continue;
+
+    const attacker = s.players[side];
+    if (attacker.attackPool < assignment.amount) {
+      throw new Error(
+        `攻击力不足：需要 ${assignment.amount}，当前持有 ${attacker.attackPool}`
+      );
+    }
+
+    const targetSide = assignment.targetSide;
+    const target = s.players[targetSide];
+
+    // 伤害结算：先扣 block，再扣 hp（game-rules.md）
+    const blockAbsorbed = Math.min(target.block, assignment.amount);
+    const hpDamage = assignment.amount - blockAbsorbed;
+
+    const updatedTarget: InternalPlayerState = {
+      ...target,
+      block: target.block - blockAbsorbed,
+      hp: target.hp - hpDamage,
+    };
+
+    const updatedAttacker: InternalPlayerState = {
+      ...attacker,
+      attackPool: attacker.attackPool - assignment.amount,
+    };
+
+    const players = [s.players[0], s.players[1]] as [
+      InternalPlayerState,
+      InternalPlayerState,
+    ];
+    players[targetSide] = updatedTarget;
+    players[side] = updatedAttacker;
+
+    s = { ...s, players };
+
+    // hp <= 0 → 立刻决出胜者并结束对局
+    if (updatedTarget.hp <= 0) {
+      s = { ...s, ended: true, winner: side };
+      break;
+    }
+  }
+
+  return s;
 }
 
 // ── 内部辅助 ──────────────────────────────────────────────────────────────────
 
 function assertActive(state: InternalMatchState, side: PlayerSide): void {
   if (state.activePlayer !== side) {
-    throw new Error(`非行动方（side=${side}）不能执行此操作，当前行动方为 side=${state.activePlayer}`);
+    throw new Error(
+      `非行动方（side=${side}）不能执行此操作，当前行动方为 side=${state.activePlayer}`
+    );
   }
 }
 
@@ -126,9 +248,8 @@ function startMatch(
 ): InternalMatchState {
   const players = state.players.map((player, idx) => {
     const shuffledDeck = shuffle(player.deck, random);
-    const openingSize = idx === 0
-      ? ruleset.firstPlayerOpeningHand
-      : ruleset.secondPlayerOpeningHand;
+    const openingSize =
+      idx === 0 ? ruleset.firstPlayerOpeningHand : ruleset.secondPlayerOpeningHand;
 
     const reset: InternalPlayerState = {
       ...player,
