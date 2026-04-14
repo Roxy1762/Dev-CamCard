@@ -1,0 +1,20 @@
+{
+  "name": "dev-camcard",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Dev-CamCard · 课表风暴 — monorepo 根配置",
+  "scripts": {
+    "dev": "pnpm -r --if-present --parallel run dev",
+    "build": "pnpm -r run build",
+    "test": "pnpm -r --if-present run test",
+    "typecheck": "pnpm -r run typecheck",
+    "lint": "pnpm -r --if-present run lint"
+  },
+  "engines": {
+    "node": ">=20",
+    "pnpm": ">=9"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild", "msgpackr-extract"]
+  }
+}
