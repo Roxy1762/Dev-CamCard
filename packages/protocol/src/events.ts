@@ -1,0 +1,29 @@
+/**
+ * 服务端公共事件类型常量
+ * 服务端权威结算后广播给客户端（non-negotiables.md）。
+ */
+export const EVT = {
+  MATCH_CREATED: "MATCH_CREATED",
+  OPENING_HAND_DRAWN: "OPENING_HAND_DRAWN",
+  TURN_STARTED: "TURN_STARTED",
+  CARD_PLAYED: "CARD_PLAYED",
+  CARD_SCHEDULED: "CARD_SCHEDULED",
+  SCHEDULE_RESOLVED: "SCHEDULE_RESOLVED",
+  VENUE_ENTERED: "VENUE_ENTERED",
+  VENUE_ACTIVATED: "VENUE_ACTIVATED",
+  MARKET_CARD_RESERVED: "MARKET_CARD_RESERVED",
+  CARD_BOUGHT: "CARD_BOUGHT",
+  MARKET_REFILLED: "MARKET_REFILLED",
+  BLOCK_GRANTED: "BLOCK_GRANTED",
+  ATTACK_ASSIGNED: "ATTACK_ASSIGNED",
+  VENUE_DESTROYED: "VENUE_DESTROYED",
+  PRESSURE_ADDED: "PRESSURE_ADDED",
+  TURN_ENDED: "TURN_ENDED",
+  MATCH_ENDED: "MATCH_ENDED",
+  /** Colyseus 消息 key：服务端推送 PublicMatchView */
+  STATE_UPDATE: "state_update",
+  /** Colyseus 消息 key：服务端推送 PrivatePlayerView（仅发给对应席位） */
+  PRIVATE_UPDATE: "private_update",
+} as const;
+
+export type EvtKey = (typeof EVT)[keyof typeof EVT];

@@ -1,0 +1,149 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "card",
+  "title": "CardDef",
+  "description": "卡牌定义 — 所有卡牌数据必须通过此 schema 校验（non-negotiables.md）",
+  "type": "object",
+  "required": ["id", "version", "name", "cost", "rarity", "lane", "type", "text"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_]*$",
+      "description": "卡牌唯一 ID，以 card-catalog.md 为准，不得擅自修改"
+    },
+    "version": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "卡牌版本号，每次改动递增"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "cost": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "购买费用（资源）"
+    },
+    "rarity": {
+      "type": "string",
+      "enum": ["common", "advanced", "signature"]
+    },
+    "lane": {
+      "type": "string",
+      "enum": ["course", "activity", "daily"],
+      "description": "所属商店栏（三栏商店）"
+    },
+    "type": {
+      "type": "string",
+      "enum": ["action", "venue"]
+    },
+    "venueKind": {
+      "type": "string",
+      "enum": ["normal", "guard"],
+      "description": "场馆子类型，type=venue 时必填"
+    },
+    "durability": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "场馆耐久度，type=venue 时有效"
+    },
+    "starter": {
+      "type": "boolean",
+      "description": "是否属于起始套牌"
+    },
+    "fixedSupply": {
+      "type": "boolean",
+      "description": "是否属于固定补给牌堆（无限）"
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "题材标签，仅作分类，不作为规则类型"
+    },
+    "text": {
+      "type": "object",
+      "required": ["body"],
+      "additionalProperties": false,
+      "properties": {
+        "body": { "type": "string", "description": "卡面正文" },
+        "reminder": { "type": "string", "description": "括号提示文字" }
+      }
+    },
+    "abilities": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/Ability" },
+      "description": "能力列表（触发器 + 效果）"
+    },
+    "balance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "notes": { "type": "string", "description": "平衡性备注" }
+      }
+    }
+  },
+  "if": {
+    "properties": { "type": { "const": "venue" } },
+    "required": ["type"]
+  },
+  "then": {
+    "required": ["venueKind"],
+    "description": "type=venue 时必须提供 venueKind"
+  },
+  "$defs": {
+    "Ability": {
+      "type": "object",
+      "required": ["trigger", "effects"],
+      "additionalProperties": false,
+      "properties": {
+        "trigger": {
+          "type": "string",
+          "enum": [
+            "onPlay",
+            "onScheduleResolve",
+            "onActivate",
+            "onTurnStart",
+            "onTurnEnd",
+            "onBuy",
+            "passive"
+          ]
+        },
+        "effects": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/Effect" }
+        },
+        "condition": {
+          "type": "string",
+          "description": "触发条件（自由文本，供 engine 解析）"
+        }
+      }
+    },
+    "Effect": {
+      "type": "object",
+      "required": ["op"],
+      "additionalProperties": true,
+      "properties": {
+        "op": {
+          "type": "string",
+          "enum": [
+            "gainResource",
+            "gainAttack",
+            "gainBlock",
+            "heal",
+            "draw",
+            "scry",
+            "drawThenDiscard",
+            "trashFromHandOrDiscard",
+            "createPressure",
+            "setFlag",
+            "gainFaceUpCard",
+            "queueDelayedDiscard"
+          ],
+          "description": "效果操作码白名单 — 非白名单 op 将被 AJV 拒绝"
+        }
+      }
+    }
+  }
+}

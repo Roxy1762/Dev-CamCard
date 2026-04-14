@@ -1,0 +1,44 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "mod-manifest",
+  "title": "ModManifest",
+  "description": "Mod 清单 — mod 只允许包含数据和资源，禁止脚本（non-negotiables.md）",
+  "type": "object",
+  "required": ["id", "version", "name"],
+  "additionalProperties": false,
+  "properties": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$"
+    },
+    "version": {
+      "type": "string",
+      "description": "语义化版本，如 '1.0.0'"
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1
+    },
+    "description": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "cards": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "新增卡牌数据文件路径列表（相对于 mod 根目录）"
+    },
+    "rulesets": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "新增规则集文件路径列表"
+    },
+    "assets": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "资源文件路径列表（图片、音效等）"
+    }
+  }
+}

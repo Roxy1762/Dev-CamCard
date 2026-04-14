@@ -1,0 +1,24 @@
+{
+  "id": "core-v1",
+  "version": 1,
+  "name": "核心规则集 v1",
+  "hp": 32,
+  "handSize": 5,
+  "firstPlayerOpeningHand": 4,
+  "secondPlayerOpeningHand": 5,
+  "scheduleSlots": 2,
+  "reserveSlots": 1,
+  "marketLanesCount": 3,
+  "marketSlotsPerLane": 2,
+  "starterDeck": [
+    { "cardId": "starter_allowance", "count": 7 },
+    { "cardId": "starter_quarrel", "count": 3 },
+    { "cardId": "starter_draft_paper", "count": 1 },
+    { "cardId": "starter_punctuality", "count": 1 }
+  ],
+  "fixedSupplies": [
+    "supply_errand_runner",
+    "supply_milk_bread",
+    "supply_print_materials"
+  ]
+}
