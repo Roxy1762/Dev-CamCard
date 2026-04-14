@@ -1,0 +1,68 @@
+[
+  {
+    "id": "supply_errand_runner",
+    "version": 1,
+    "name": "跑腿侠",
+    "cost": 3,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "fixedSupply": true,
+    "tags": [],
+    "text": {
+      "body": "获得 1 资源，摸 1 张牌。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "gainResource", "amount": 1 },
+          { "op": "draw", "count": 1 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "supply_milk_bread",
+    "version": 1,
+    "name": "牛奶面包",
+    "cost": 2,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "fixedSupply": true,
+    "tags": [],
+    "text": {
+      "body": "获得 2 资源，回复 1 生命。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "gainResource", "amount": 2 },
+          { "op": "heal", "amount": 1 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "supply_print_materials",
+    "version": 1,
+    "name": "打印材料",
+    "cost": 4,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "fixedSupply": true,
+    "tags": [],
+    "text": {
+      "body": "获得 3 资源。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainResource", "amount": 3 }]
+      }
+    ]
+  }
+]
