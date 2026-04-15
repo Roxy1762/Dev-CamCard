@@ -1,0 +1,73 @@
+[
+  {
+    "id": "starter_allowance",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 0,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "starter": true,
+    "tags": [],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainResource", "amount": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "starter_quarrel",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 0,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "starter": true,
+    "tags": [],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainAttack", "amount": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "starter_draft_paper",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 0,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "starter": true,
+    "tags": [],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "draw", "count": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "starter_punctuality",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 0,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "starter": true,
+    "tags": [],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "gainResource", "amount": 1 },
+          { "op": "gainBlock", "amount": 1 }
+        ]
+      }
+    ]
+  }
+]

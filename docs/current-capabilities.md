@@ -89,14 +89,28 @@
 
 ### 数据层
 
-- [x] starter.json（4 种起始牌）
-- [x] fixed-supplies.json（3 种固定补给）
-- [x] status.json（status_pressure，isPressure=true）
-- [x] market-core.json（**11 张**：原 7 + 白色/中立 4 张）：
-  - white_discipline_warning（**queueDelayedDiscard(opp,1)** + gainBlock(2)，版本 v2）
-  - white_dorm_inspection（**queueDelayedDiscard(opp,2)** + gainBlock(1)，版本 v2）
-  - white_student_affairs_talk（**queueDelayedDiscard(opp,3)** + gainBlock(3)，版本 v2）
-  - neutral_finals_week（createPressure 双方）
+- [x] **v1 legacy 格式**（server 当前读取，保持兼容）：
+  - starter.json（4 种起始牌）
+  - fixed-supplies.json（3 种固定补给）
+  - status.json（status_pressure，isPressure=true）
+  - market-core.json（**11 张**：原 7 + 白色/中立 4 张，白色 3 张 v2 效果）
+- [x] **v2 内容系统**（新分层结构，详见 docs/content-architecture.md）：
+  - data/cards/rules/（4 文件，规则真源，无 name/text）
+  - data/cards/text/zh-CN/（4 文件，中文文案）
+  - data/cards/text/en-US/（4 文件，英文占位文案）
+  - data/sets/core-v1.json（核心集清单，19 张卡 ID）
+  - data/content-packs/base.json（基础包清单）
+- [x] **JSON Schema 体系**：
+  - card.schema.json（v1，已补全 isPressure/isGuard，修正 rarity 枚举）
+  - card-rule.schema.json（v2 规则真源 schema，新增）
+  - card-text.schema.json（locale 文案 schema，新增）
+  - set.schema.json（集合清单 schema，新增）
+  - content-pack.schema.json（内容包 schema，新增）
+- [x] **content-loader**（packages/schemas/src/content-loader.ts）：
+  - loadCardRuleFile / loadCardTextFile
+  - mergeCardDef（规则 + 文案合并）
+  - getCardText（locale 安全降级）
+  - loadRuleBatch / loadMergedBatch（批量加载）
 
 ---
 
@@ -119,7 +133,9 @@
 - [ ] 断线重连（Colyseus `allowReconnection` 未配置）
 - [ ] 回放记录（命令日志未持久化）
 - [ ] 数据库（PostgreSQL + Prisma 未初始化）
-- [ ] AJV 校验（卡牌 JSON 尚未接入 Schema 校验，当前为代码断言）
+- [x] AJV 校验：schemas 包已有 v1/v2 全套校验器，但 server 加载时**未接入运行时校验**（只有测试时校验）
+- [ ] server 迁移至 v2 加载路径（当前仍读取旧 flat JSON）
+- [ ] 完整 en-US 翻译（当前为机器翻译占位）
 
 ### 客户端体验
 
@@ -133,15 +149,27 @@
 
 ## 测试覆盖（截至本轮）
 
+### engine 包
+
+| 文件 | 测试数 |
+|------|--------|
+| reduce.test.ts | 47 |
+| market.test.ts | 24 |
+| turn.test.ts | 12 |
+| deck.test.ts | 13 |
+| engine.test.ts | 1 |
+| reserve.test.ts | 17 |
+| effects.test.ts | 25 |
+| schema.test.ts | 32 |
+| delayedDiscard.test.ts | 19 |
+| **小计** | **190** |
+
+### schemas 包
+
 | 文件 | 测试数 | 说明 |
 |------|--------|------|
-| reduce.test.ts | 47 | |
-| market.test.ts | 24 | |
-| turn.test.ts | 12 | |
-| deck.test.ts | 13 | |
-| engine.test.ts | 1 | |
-| reserve.test.ts | 18 | |
-| effects.test.ts | 34 | |
-| schema.test.ts | 22 | |
-| **delayedDiscard.test.ts** | **19** | **本轮新增** |
-| **合计** | **190** | **全部通过** |
+| validate.test.ts | 16 | v1 schema 校验 |
+| **content-system.test.ts** | **44** | **v2 内容系统（本轮新增）** |
+| **小计** | **60** | |
+
+**总计：250 个测试，全部通过**

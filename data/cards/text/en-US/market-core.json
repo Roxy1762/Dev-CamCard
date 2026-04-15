@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "locale": "en-US",
+  "cards": {
+    "red_pre_match_warmup": {
+      "name": "Pre-Match Warmup",
+      "body": "Gain 1 attack. Schedule: At the start of next turn, gain 2 attack."
+    },
+    "red_extra_training_plan": {
+      "name": "Extra Training Plan",
+      "body": "Draw 1 card. Schedule: At the start of next turn, gain 2 attack."
+    },
+    "blue_all_night_study": {
+      "name": "All-Night Study",
+      "body": "Gain 2 resources. Schedule: At the start of next turn, draw 2 cards."
+    },
+    "white_duty_student": {
+      "name": "Duty Student",
+      "body": "[Guard Venue] Opponents must destroy this before attacking your player or other venues. Activate: Gain 1 block."
+    },
+    "white_discipline_week": {
+      "name": "Discipline Week",
+      "body": "Gain 3 block."
+    },
+    "green_makerspace": {
+      "name": "Makerspace",
+      "body": "[Venue] Activate: Gain 2 resources."
+    },
+    "neutral_class_representative_notice": {
+      "name": "Class Rep Notice",
+      "body": "Draw 1 card. Gain 1 resource."
+    },
+    "white_discipline_warning": {
+      "name": "Discipline Warning",
+      "body": "Opponent discards 1 card at the start of their next turn. Gain 2 block."
+    },
+    "white_dorm_inspection": {
+      "name": "Dorm Inspection",
+      "body": "Opponent discards 2 cards at the start of their next turn. Gain 1 block."
+    },
+    "white_student_affairs_talk": {
+      "name": "Student Affairs Talk",
+      "body": "Opponent discards 3 cards at the start of their next turn. Gain 3 block."
+    },
+    "neutral_finals_week": {
+      "name": "Finals Week",
+      "body": "Pressure strikes! Give opponent 2 Pressure. You also get 1 Pressure."
+    }
+  }
+}

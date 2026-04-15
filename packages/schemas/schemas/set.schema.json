@@ -1,0 +1,39 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "set",
+  "title": "SetManifest",
+  "description": "卡牌集合清单 — 一个独立可交付的卡牌扩展包的所有卡牌 ID 列表。\n一个 Set 是内容的最小打包单位，可被多个 ContentPack 引用。",
+  "type": "object",
+  "required": ["schemaVersion", "id", "contentVersion", "cardIds"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "集合唯一 ID"
+    },
+    "contentVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "内容版本（新增/移除卡牌时递增）"
+    },
+    "name": {
+      "type": "string",
+      "description": "集合显示名称（可本地化，此处留中文默认）"
+    },
+    "description": {
+      "type": "string",
+      "description": "集合简介"
+    },
+    "cardIds": {
+      "type": "array",
+      "items": { "type": "string" },
+      "minItems": 1,
+      "description": "本集合包含的所有卡牌 ID"
+    }
+  }
+}

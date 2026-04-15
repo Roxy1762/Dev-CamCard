@@ -1,0 +1,50 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "card-text",
+  "title": "CardTextFile",
+  "description": "本地化卡牌文案文件（一个 locale 对应一个文件）。\n文案与规则分离：name/body/reminder 是显示层，随 locale 变化；规则数据（abilities/cost 等）不随语言变化，存于 card-rule 文件。",
+  "type": "object",
+  "required": ["schemaVersion", "locale", "cards"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "文案 schema 版本"
+    },
+    "locale": {
+      "type": "string",
+      "pattern": "^[a-z]{2}(-[A-Z]{2})?$",
+      "description": "BCP-47 locale 标识，如 zh-CN、en-US"
+    },
+    "cards": {
+      "type": "object",
+      "description": "cardId → 文案条目的映射",
+      "additionalProperties": {
+        "$ref": "#/$defs/CardTextEntry"
+      }
+    }
+  },
+  "$defs": {
+    "CardTextEntry": {
+      "type": "object",
+      "required": ["name", "body"],
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "description": "卡牌名称（本地化）"
+        },
+        "body": {
+          "type": "string",
+          "description": "卡面正文（本地化）"
+        },
+        "reminder": {
+          "type": ["string", "null"],
+          "description": "括号提示文字（本地化，可为 null）"
+        }
+      }
+    }
+  }
+}

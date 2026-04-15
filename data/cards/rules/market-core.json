@@ -1,0 +1,211 @@
+[
+  {
+    "id": "red_pre_match_warmup",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": ["red", "sport"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainAttack", "amount": 1 }]
+      },
+      {
+        "trigger": "onScheduleResolve",
+        "effects": [{ "op": "gainAttack", "amount": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "red_extra_training_plan",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "activity",
+    "type": "action",
+    "tags": ["red", "sport"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "draw", "count": 1 }]
+      },
+      {
+        "trigger": "onScheduleResolve",
+        "effects": [{ "op": "gainAttack", "amount": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "blue_all_night_study",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "course",
+    "type": "action",
+    "tags": ["blue", "study"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainResource", "amount": 2 }]
+      },
+      {
+        "trigger": "onScheduleResolve",
+        "effects": [{ "op": "draw", "count": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "white_duty_student",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "venue",
+    "isGuard": true,
+    "durability": 4,
+    "activationsPerTurn": 1,
+    "tags": ["white", "discipline"],
+    "abilities": [
+      {
+        "trigger": "onActivate",
+        "effects": [{ "op": "gainBlock", "amount": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "white_discipline_week",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "daily",
+    "type": "action",
+    "tags": ["white", "discipline"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainBlock", "amount": 3 }]
+      }
+    ]
+  },
+  {
+    "id": "green_makerspace",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 5,
+    "rarity": "rare",
+    "lane": "activity",
+    "type": "venue",
+    "isGuard": false,
+    "durability": 5,
+    "activationsPerTurn": 1,
+    "tags": ["green", "club"],
+    "abilities": [
+      {
+        "trigger": "onActivate",
+        "effects": [{ "op": "gainResource", "amount": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "neutral_class_representative_notice",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "tags": ["neutral"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "draw", "count": 1 },
+          { "op": "gainResource", "amount": 1 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "white_discipline_warning",
+    "schemaVersion": 2,
+    "contentVersion": 2,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "tags": ["white", "discipline"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "queueDelayedDiscard", "count": 1, "target": "opponent" },
+          { "op": "gainBlock", "amount": 2 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "white_dorm_inspection",
+    "schemaVersion": 2,
+    "contentVersion": 2,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "daily",
+    "type": "action",
+    "tags": ["white", "discipline"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "queueDelayedDiscard", "count": 2, "target": "opponent" },
+          { "op": "gainBlock", "amount": 1 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "white_student_affairs_talk",
+    "schemaVersion": 2,
+    "contentVersion": 2,
+    "cost": 5,
+    "rarity": "rare",
+    "lane": "daily",
+    "type": "action",
+    "tags": ["white", "discipline"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "queueDelayedDiscard", "count": 3, "target": "opponent" },
+          { "op": "gainBlock", "amount": 3 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "neutral_finals_week",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "tags": ["neutral"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "createPressure", "count": 2, "target": "opponent" },
+          { "op": "createPressure", "count": 1, "target": "self" }
+        ]
+      }
+    ]
+  }
+]

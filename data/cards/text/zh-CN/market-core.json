@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "locale": "zh-CN",
+  "cards": {
+    "red_pre_match_warmup": {
+      "name": "赛前热身",
+      "body": "获得 1 攻击。安排：下回合开始时，获得 2 攻击。"
+    },
+    "red_extra_training_plan": {
+      "name": "额外训练计划",
+      "body": "摸 1 张牌。安排：下回合开始时，获得 2 攻击。"
+    },
+    "blue_all_night_study": {
+      "name": "通宵自习",
+      "body": "获得 2 资源。安排：下回合开始时，摸 2 张牌。"
+    },
+    "white_duty_student": {
+      "name": "值日生",
+      "body": "【值守场馆】对方必须先摧毁此处才能攻击你的玩家或其他场馆。启动：获得 1 防备。"
+    },
+    "white_discipline_week": {
+      "name": "纪律周",
+      "body": "获得 3 防备。"
+    },
+    "green_makerspace": {
+      "name": "创客空间",
+      "body": "【场馆】启动：获得 2 资源。"
+    },
+    "neutral_class_representative_notice": {
+      "name": "班代通知",
+      "body": "摸 1 张牌，获得 1 资源。"
+    },
+    "white_discipline_warning": {
+      "name": "纪律警告",
+      "body": "对手下回合开始时弃 1 张牌。获得 2 防备。"
+    },
+    "white_dorm_inspection": {
+      "name": "宿舍检查",
+      "body": "对手下回合开始时弃 2 张牌。获得 1 防备。"
+    },
+    "white_student_affairs_talk": {
+      "name": "学生事务谈话",
+      "body": "对手下回合开始时弃 3 张牌。获得 3 防备。"
+    },
+    "neutral_finals_week": {
+      "name": "期末周",
+      "body": "压力来临！给对方产生 2 压力，自己也产生 1 压力。"
+    }
+  }
+}

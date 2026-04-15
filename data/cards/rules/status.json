@@ -1,0 +1,14 @@
+[
+  {
+    "id": "status_pressure",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 0,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "isPressure": true,
+    "tags": ["status", "pressure"],
+    "abilities": []
+  }
+]

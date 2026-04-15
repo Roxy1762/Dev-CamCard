@@ -1,0 +1,52 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "content-pack",
+  "title": "ContentPackManifest",
+  "description": "内容包清单 — 将 sets（卡牌集合）和 rulesets（规则集）打包在一起，作为可安装的内容单位。\n一个 mod 或扩展包通常以 ContentPack 形式发布。",
+  "type": "object",
+  "required": ["schemaVersion", "id", "contentVersion", "includes"],
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_-]*$",
+      "description": "内容包唯一 ID"
+    },
+    "contentVersion": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "内容包版本"
+    },
+    "name": {
+      "type": "string",
+      "description": "内容包显示名称"
+    },
+    "description": {
+      "type": "string"
+    },
+    "author": {
+      "type": "string"
+    },
+    "includes": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "本包引用的 sets 和 rulesets 列表",
+      "properties": {
+        "sets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "引用的 set ID 列表（对应 data/sets/*.json 中的 id）"
+        },
+        "rulesets": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "引用的 ruleset ID 列表（对应 data/rulesets/*.json 中的 id）"
+        }
+      }
+    }
+  }
+}
