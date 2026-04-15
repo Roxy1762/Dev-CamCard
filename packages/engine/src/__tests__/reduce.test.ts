@@ -229,9 +229,9 @@ describe("reduce: BUY_MARKET_CARD", () => {
       s2.players[1],
     ];
     const market = [
-      { lane: "course" as const, slots: [marketCard, null] },
-      { lane: "activity" as const, slots: [null, null] },
-      { lane: "daily" as const, slots: [null, null] },
+      { lane: "course" as const, slots: [marketCard, null], deck: [] },
+      { lane: "activity" as const, slots: [null, null], deck: [] },
+      { lane: "daily" as const, slots: [null, null], deck: [] },
     ];
     return { ...s2, players, market };
   }

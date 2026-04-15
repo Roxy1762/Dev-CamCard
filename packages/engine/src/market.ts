@@ -6,7 +6,7 @@ import type { CardInstance, InternalMatchState, InternalPlayerState } from "./ty
  *
  * 规则：
  *  - 消耗 cost 资源
- *  - 将卡牌从商店槽移除
+ *  - 将卡牌从商店槽移除，若该栏牌堆（deck）仍有牌则自动补位
  *  - 卡牌加入买家弃牌堆（而非手牌）
  *
  * @throws 资源不足 / 卡牌不在商店时抛出 Error
@@ -25,18 +25,22 @@ export function buyFromMarket(
     );
   }
 
-  // 从商店中找到并移除目标卡牌
+  // 从商店中找到并移除目标卡牌，同时从该栏牌堆补位
   let boughtCard: CardInstance | null = null;
-  const market = state.market.map((lane) => ({
-    ...lane,
-    slots: lane.slots.map((slot) => {
-      if (slot?.instanceId === instanceId) {
-        boughtCard = slot;
-        return null;
-      }
-      return slot;
-    }),
-  }));
+  const market = state.market.map((lane) => {
+    const slotIdx = lane.slots.findIndex((s) => s?.instanceId === instanceId);
+    if (slotIdx === -1) return lane;
+
+    boughtCard = lane.slots[slotIdx]!;
+
+    // 从该栏牌堆顶补一张（若有）
+    const [refill, ...remainingDeck] = lane.deck;
+    const newSlots = lane.slots.map((s, i) =>
+      i === slotIdx ? (refill ?? null) : s
+    );
+
+    return { ...lane, slots: newSlots, deck: remainingDeck };
+  });
 
   if (!boughtCard) {
     throw new Error(`商店中未找到卡牌实例: ${instanceId}`);
