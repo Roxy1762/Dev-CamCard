@@ -60,6 +60,11 @@ export interface InternalPlayerState {
   hasReservedThisTurn: boolean;
   /** 活动标志位（用于 setFlag 效果，如 nextBoughtCardToDeckTop） */
   activeFlags: string[];
+  /**
+   * 延迟弃牌计数：下回合开始时必须弃置的手牌数量。
+   * 由 queueDelayedDiscard 效果积累，在 beginTurn 中结算后归零。
+   */
+  pendingDiscardCount: number;
 }
 
 /**

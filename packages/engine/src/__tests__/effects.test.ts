@@ -30,6 +30,7 @@ function makePlayer(overrides: Partial<InternalPlayerState> = {}): InternalPlaye
     reservedCardTurn: null,
     hasReservedThisTurn: false,
     activeFlags: [],
+    pendingDiscardCount: 0,
     ...overrides,
   };
 }

@@ -115,24 +115,24 @@ describe("white card abilities", () => {
     return c!;
   }
 
-  it("white_discipline_warning: createPressure(opponent,1) + gainBlock(2)", () => {
+  it("white_discipline_warning: queueDelayedDiscard(opponent,1) + gainBlock(2)", () => {
     const c = findCard("white_discipline_warning");
     const effects = c.abilities[0].effects;
-    expect(effects).toContainEqual({ op: "createPressure", count: 1, target: "opponent" });
+    expect(effects).toContainEqual({ op: "queueDelayedDiscard", count: 1, target: "opponent" });
     expect(effects).toContainEqual({ op: "gainBlock", amount: 2 });
   });
 
-  it("white_dorm_inspection: createPressure(opponent,2) + gainBlock(1)", () => {
+  it("white_dorm_inspection: queueDelayedDiscard(opponent,2) + gainBlock(1)", () => {
     const c = findCard("white_dorm_inspection");
     const effects = c.abilities[0].effects;
-    expect(effects).toContainEqual({ op: "createPressure", count: 2, target: "opponent" });
+    expect(effects).toContainEqual({ op: "queueDelayedDiscard", count: 2, target: "opponent" });
     expect(effects).toContainEqual({ op: "gainBlock", amount: 1 });
   });
 
-  it("white_student_affairs_talk: createPressure(opponent,3) + gainBlock(3)", () => {
+  it("white_student_affairs_talk: queueDelayedDiscard(opponent,3) + gainBlock(3)", () => {
     const c = findCard("white_student_affairs_talk");
     const effects = c.abilities[0].effects;
-    expect(effects).toContainEqual({ op: "createPressure", count: 3, target: "opponent" });
+    expect(effects).toContainEqual({ op: "queueDelayedDiscard", count: 3, target: "opponent" });
     expect(effects).toContainEqual({ op: "gainBlock", amount: 3 });
   });
 

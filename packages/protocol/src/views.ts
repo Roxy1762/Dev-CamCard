@@ -49,6 +49,8 @@ export interface PublicPlayerSummary {
   reservedCard: PublicCardRef | null;
   /** 本回合是否已执行过预约（每回合只能预约 1 次） */
   hasReservedThisTurn: boolean;
+  /** 下回合开始时需弃置的手牌数（由 queueDelayedDiscard 效果积累） */
+  pendingDiscardCount: number;
 }
 
 /**

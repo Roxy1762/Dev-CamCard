@@ -135,5 +135,6 @@ function makePlayer(
     reservedCardTurn: null,
     hasReservedThisTurn: false,
     activeFlags: [],
+    pendingDiscardCount: 0,
   };
 }

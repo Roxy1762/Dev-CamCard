@@ -27,11 +27,16 @@
 - [x] 多目标攻击分配（ASSIGN_ATTACK：攻玩家 / 攻场馆 / guard 限制）
 - [x] 固定补给购买（BUY_FIXED_SUPPLY，无限数量）
 - [x] **三栏市场主循环**：`createMarketState` 洗牌 + 公开槽 + 隐藏牌堆；`buyFromMarket` 自动补位
-- [x] **预约位机制**（本轮完成）：
+- [x] **预约位机制**：
   - `reserveFromMarket`：支付 1 资源，预约公开槽牌，对应栏立即补位
   - `buyReservedCard`：下回合起购买，费用 -1
   - `hasReservedThisTurn` 每回合开始重置，`beginTurn` 中处理
   - 预约位一次只能 1 张，每回合只能预约 1 次
+- [x] **延迟弃牌（queueDelayedDiscard）**（本轮新增）：
+  - `pendingDiscardCount` 字段记录下回合开始时需弃牌数
+  - `applyStateEffects` 正确积累到目标玩家
+  - `beginTurn` 在清理阶段结算并归零（手牌不足时弃光即止）
+  - 多次叠加正确累加
 - [x] 结束回合（END_TURN）：弃行动牌 / 弃手牌（含压力）/ 清防备 / 场馆重置 / 结算日程槽 / 摸至手上限
 - [x] 投降（CONCEDE）
 
@@ -47,10 +52,11 @@
 | heal | self | 回复生命 |
 | draw | self | 摸牌 |
 | drawThenDiscard | self | 摸牌后弃牌 |
-| createPressure | self / opponent | 产生压力牌（本轮新增） |
+| createPressure | self / opponent | 产生压力牌 |
 | scry | self | 预习：查看牌堆顶 N 张随机重洗（MVP，无交互）|
 | setFlag | self | 设置标志位（如 nextBoughtCardToDeckTop）|
 | gainFaceUpCard | — | ⚠️ 占位 no-op |
+| **queueDelayedDiscard** | **self / opponent** | **让目标下回合开始时弃 N 张（本轮新增）** |
 
 已支持的 `CardCondition` type（用于 CardAbility.condition）：
 
@@ -75,20 +81,21 @@
 - [x] Phaser 场景：BootScene（连接）+ RoomScene（对战 UI）
 - [x] RoomClient 封装（Colyseus 连接 / 命令发送 / 双视图接收）
 - [x] 基础交互：READY / 打牌 / 买牌 / 攻击 / 结束回合 / 场馆 / 日程槽
-- [x] **预约位 UI**（本轮完成）：
+- [x] **预约位 UI**：
   - 我方区域显示预约牌 + "购买预约牌（折扣1）"按钮
   - 对方区域显示预约位占位状态
   - 商店每张市场牌下方有"预约(1资源)"按钮（满足条件时显示）
+- [x] **pendingDiscardCount** 通过 PublicPlayerSummary 向双方广播（客户端可展示对手下回合弃牌数）
 
 ### 数据层
 
 - [x] starter.json（4 种起始牌）
 - [x] fixed-supplies.json（3 种固定补给）
 - [x] status.json（status_pressure，isPressure=true）
-- [x] market-core.json（**11 张**：原 7 + 本轮新增 4 张白/中立）：
-  - white_discipline_warning（createPressure×1 + gainBlock×2）
-  - white_dorm_inspection（createPressure×2 + gainBlock×1）
-  - white_student_affairs_talk（createPressure×3 + gainBlock×3）
+- [x] market-core.json（**11 张**：原 7 + 白色/中立 4 张）：
+  - white_discipline_warning（**queueDelayedDiscard(opp,1)** + gainBlock(2)，版本 v2）
+  - white_dorm_inspection（**queueDelayedDiscard(opp,2)** + gainBlock(1)，版本 v2）
+  - white_student_affairs_talk（**queueDelayedDiscard(opp,3)** + gainBlock(3)，版本 v2）
   - neutral_finals_week（createPressure 双方）
 
 ---
@@ -101,7 +108,6 @@
 - [ ] **市场牌刷新事件**：无 MARKET_REFILLED 事件广播
 - [ ] **交互式 scry**：当前为随机重洗（无玩家选择顺序）
 - [ ] **trashFromHandOrDiscard**：需 pending-action 状态机
-- [ ] **queueDelayedDiscard**：需延迟效果队列
 
 ### 数据
 
@@ -118,6 +124,7 @@
 ### 客户端体验
 
 - [ ] 攻击分配 UI 细化（当前为"全力攻击对手"简化方案）
+- [ ] 延迟弃牌视觉提示（pendingDiscardCount 已广播，但 RoomScene 尚未展示）
 - [ ] 市场补位动画
 - [ ] 手机端适配（MVP 不做）
 - [ ] 实时观战（MVP 不做）
@@ -133,7 +140,8 @@
 | turn.test.ts | 12 | |
 | deck.test.ts | 13 | |
 | engine.test.ts | 1 | |
-| reserve.test.ts | 18 | 本轮新增 |
-| effects.test.ts | 34 | 本轮新增 |
-| schema.test.ts | 22 | 本轮新增 |
-| **合计** | **171** | **全部通过** |
+| reserve.test.ts | 18 | |
+| effects.test.ts | 34 | |
+| schema.test.ts | 22 | |
+| **delayedDiscard.test.ts** | **19** | **本轮新增** |
+| **合计** | **190** | **全部通过** |
