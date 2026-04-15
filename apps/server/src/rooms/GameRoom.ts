@@ -9,7 +9,7 @@ import {
   toPublicMatchView,
   toPrivatePlayerView,
 } from "@dev-camcard/engine";
-import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef } from "@dev-camcard/engine";
+import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef, CardInstance, MarketLaneState } from "@dev-camcard/engine";
 
 // ── 数据加载（模块级，仅执行一次）────────────────────────────────────────────
 
@@ -26,11 +26,16 @@ interface RawCardJson {
   id: string;
   cost: number;
   type: "action" | "venue";
+  lane?: string;
+  isGuard?: boolean;
+  durability?: number;
+  activationsPerTurn?: number;
   abilities: CardDef["abilities"];
 }
 
 const starterCards: RawCardJson[] = loadJson("cards/starter.json");
 const supplyCards: RawCardJson[] = loadJson("cards/fixed-supplies.json");
+const marketCards: RawCardJson[] = loadJson("cards/market-core.json");
 const ruleset: RulesetConfig = loadJson("rulesets/core-v1.json");
 
 // cardId → cost 查找表
@@ -38,12 +43,15 @@ const costMap = new Map<string, number>();
 // cardId → CardDef 查找表
 const cardDefMap = new Map<string, CardDef>();
 
-for (const c of [...starterCards, ...supplyCards]) {
+for (const c of [...starterCards, ...supplyCards, ...marketCards]) {
   costMap.set(c.id, c.cost);
   cardDefMap.set(c.id, {
     id: c.id,
     type: c.type,
     abilities: c.abilities ?? [],
+    isGuard: c.isGuard,
+    durability: c.durability,
+    activationsPerTurn: c.activationsPerTurn,
   });
 }
 
@@ -52,6 +60,39 @@ const ENGINE_CONFIG: EngineConfig = {
   getCardCost: (cardId) => costMap.get(cardId) ?? 0,
   getCardDef: (cardId) => cardDefMap.get(cardId),
 };
+
+/**
+ * 按商店栏（lane）分组市场牌，用于初始化市场槽位。
+ * MVP：每栏最多 2 张（对应 ruleset.marketSlotsPerLane）。
+ */
+function buildInitialMarket(
+  cards: RawCardJson[],
+  ruleset: RulesetConfig,
+  genId: () => string
+): MarketLaneState[] {
+  const laneOrder = ["course", "activity", "daily"] as const;
+  const byLane: Record<string, RawCardJson[]> = {
+    course: [],
+    activity: [],
+    daily: [],
+  };
+
+  for (const card of cards) {
+    const lane = card.lane ?? "daily";
+    if (lane in byLane) {
+      byLane[lane].push(card);
+    }
+  }
+
+  return laneOrder.slice(0, ruleset.marketLanesCount).map((lane) => {
+    const candidates = byLane[lane];
+    const slots: (CardInstance | null)[] = Array(ruleset.marketSlotsPerLane).fill(null);
+    for (let i = 0; i < Math.min(candidates.length, ruleset.marketSlotsPerLane); i++) {
+      slots[i] = { instanceId: genId(), cardId: candidates[i].id };
+    }
+    return { lane, slots };
+  });
+}
 
 // ── GameRoom ──────────────────────────────────────────────────────────────────
 
@@ -71,9 +112,16 @@ export class GameRoom extends Room {
   private matchState!: InternalMatchState;
   /** sessionId → 席位 */
   private sideMap = new Map<string, PlayerSide>();
+  /** 房间内 UUID 计数器（简单递增，测试友好） */
+  private idCounter = 0;
+  private genId = () => `room-${this.roomId}-${++this.idCounter}`;
 
   onCreate(_options: unknown): void {
-    this.matchState = createMatchState(this.roomId, ruleset, ["玩家一", "玩家二"]);
+    const baseState = createMatchState(this.roomId, ruleset, ["玩家一", "玩家二"], this.genId);
+
+    // 用市场牌填充初始商店槽（MVP：固定按栏分配）
+    const market = buildInitialMarket(marketCards, ruleset, this.genId);
+    this.matchState = { ...baseState, market };
 
     // 统一消息处理器：客户端发 { type: CMD.*, ...payload }
     this.onMessage("*", (client: Client, type: string | number, message: unknown) => {

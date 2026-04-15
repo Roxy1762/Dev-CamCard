@@ -1,0 +1,156 @@
+[
+  {
+    "id": "red_pre_match_warmup",
+    "version": 1,
+    "name": "赛前热身",
+    "cost": 3,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": ["red", "sport"],
+    "text": {
+      "body": "获得 1 攻击。安排：下回合开始时，获得 2 攻击。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainAttack", "amount": 1 }]
+      },
+      {
+        "trigger": "onScheduleResolve",
+        "effects": [{ "op": "gainAttack", "amount": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "red_extra_training_plan",
+    "version": 1,
+    "name": "额外训练计划",
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "activity",
+    "type": "action",
+    "tags": ["red", "sport"],
+    "text": {
+      "body": "摸 1 张牌。安排：下回合开始时，获得 2 攻击。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "draw", "count": 1 }]
+      },
+      {
+        "trigger": "onScheduleResolve",
+        "effects": [{ "op": "gainAttack", "amount": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "blue_all_night_study",
+    "version": 1,
+    "name": "通宵自习",
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "course",
+    "type": "action",
+    "tags": ["blue", "study"],
+    "text": {
+      "body": "获得 2 资源。安排：下回合开始时，摸 2 张牌。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainResource", "amount": 2 }]
+      },
+      {
+        "trigger": "onScheduleResolve",
+        "effects": [{ "op": "draw", "count": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "white_duty_student",
+    "version": 1,
+    "name": "值日生",
+    "cost": 3,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "venue",
+    "isGuard": true,
+    "durability": 4,
+    "activationsPerTurn": 1,
+    "tags": ["white", "discipline"],
+    "text": {
+      "body": "【值守场馆】对方必须先摧毁此处才能攻击你的玩家或其他场馆。启动：获得 1 防备。"
+    },
+    "abilities": [
+      {
+        "trigger": "onActivate",
+        "effects": [{ "op": "gainBlock", "amount": 1 }]
+      }
+    ]
+  },
+  {
+    "id": "white_discipline_week",
+    "version": 1,
+    "name": "纪律周",
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "daily",
+    "type": "action",
+    "tags": ["white", "discipline"],
+    "text": {
+      "body": "获得 3 防备。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainBlock", "amount": 3 }]
+      }
+    ]
+  },
+  {
+    "id": "green_makerspace",
+    "version": 1,
+    "name": "创客空间",
+    "cost": 5,
+    "rarity": "rare",
+    "lane": "activity",
+    "type": "venue",
+    "isGuard": false,
+    "durability": 5,
+    "activationsPerTurn": 1,
+    "tags": ["green", "club"],
+    "text": {
+      "body": "【场馆】启动：获得 2 资源。"
+    },
+    "abilities": [
+      {
+        "trigger": "onActivate",
+        "effects": [{ "op": "gainResource", "amount": 2 }]
+      }
+    ]
+  },
+  {
+    "id": "neutral_class_representative_notice",
+    "version": 1,
+    "name": "班代通知",
+    "cost": 2,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "tags": ["neutral"],
+    "text": {
+      "body": "摸 1 张牌，获得 1 资源。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "draw", "count": 1 },
+          { "op": "gainResource", "amount": 1 }
+        ]
+      }
+    ]
+  }
+]

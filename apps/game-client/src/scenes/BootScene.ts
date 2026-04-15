@@ -1,22 +1,23 @@
 import Phaser from "phaser";
 import { RoomClient } from "../network/RoomClient";
-import type { PublicMatchView } from "@dev-camcard/protocol";
+import type { PublicMatchView, PrivatePlayerView } from "@dev-camcard/protocol";
 import { preloadRuntimePlaceholders } from "../assets/runtimeAssets";
 
 /**
  * BootScene — 启动 + 连接场景
  *
  * 职责：
- *  1. 显示"正在连接..."占位文字
- *  2. 发起 Colyseus 连接
- *  3. 连接成功 + 收到首个状态后，切换到 RoomScene
- *  4. 连接失败则展示错误文本
+ *  1. 预加载占位资源
+ *  2. 显示"正在连接..."占位文字
+ *  3. 发起 Colyseus 连接
+ *  4. 同时等待首个 PublicMatchView + PrivatePlayerView
+ *  5. 两者均到达后切换到 RoomScene
+ *  6. 连接失败则展示错误文本（不静默失败）
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: "BootScene" });
   }
-
 
   preload(): void {
     preloadRuntimePlaceholders(this.load);
@@ -42,16 +43,30 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
-    // 建立 RoomClient，注册首次状态回调后再连接
+    // 等待 state_update + private_update 均到达后再切换场景
     const roomClient = new RoomClient();
+    let firstView: PublicMatchView | null = null;
+    let firstPrivate: PrivatePlayerView | null = null;
     let transitioned = false;
 
-    // 注册状态回调：收到首个快照时切换到 RoomScene
-    roomClient.onStateUpdate = (view: PublicMatchView) => {
-      if (transitioned) return;
+    const tryTransition = () => {
+      if (transitioned || !firstView || !firstPrivate) return;
       transitioned = true;
-      // 转交 roomClient 给 RoomScene，让其继续接收后续更新
-      this.scene.start("RoomScene", { view, roomClient });
+      this.scene.start("RoomScene", {
+        view: firstView,
+        privateView: firstPrivate,
+        roomClient,
+      });
+    };
+
+    roomClient.onStateUpdate = (view: PublicMatchView) => {
+      firstView = view;
+      tryTransition();
+    };
+
+    roomClient.onPrivateUpdate = (pv: PrivatePlayerView) => {
+      firstPrivate = pv;
+      tryTransition();
     };
 
     roomClient.joinOrCreate("game_room", {}).catch((err: unknown) => {
