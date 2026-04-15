@@ -13,11 +13,18 @@
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "gainResource", "amount": 1 },
-          { "op": "draw", "count": 1 }
+          {
+            "op": "gainResource",
+            "amount": 1
+          },
+          {
+            "op": "draw",
+            "count": 1
+          }
         ]
       }
-    ]
+    ],
+    "artKey": "supply_errand_runner"
   },
   {
     "id": "supply_milk_bread",
@@ -33,11 +40,18 @@
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "gainResource", "amount": 2 },
-          { "op": "heal", "amount": 1 }
+          {
+            "op": "gainResource",
+            "amount": 2
+          },
+          {
+            "op": "heal",
+            "amount": 1
+          }
         ]
       }
-    ]
+    ],
+    "artKey": "supply_milk_bread"
   },
   {
     "id": "supply_print_materials",
@@ -52,8 +66,14 @@
     "abilities": [
       {
         "trigger": "onPlay",
-        "effects": [{ "op": "gainResource", "amount": 3 }]
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 3
+          }
+        ]
       }
-    ]
+    ],
+    "artKey": "supply_print_materials"
   }
 ]

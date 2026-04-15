@@ -8,12 +8,12 @@
 1. **规则数据与本地化文案分层**：
    - 新目录 `data/cards/rules/` — v2 规则真源（无 name/text）
    - 新目录 `data/cards/text/zh-CN/` — 中文文案
-   - 新目录 `data/cards/text/en-US/` — 英文占位文案
+   - 新目录 `data/cards/text/en-US/` — 最小英文占位文案
 2. **新增 4 个 schema**（`card-rule` / `card-text` / `set` / `content-pack`）
 3. **修复 v1 card schema**（补全 `isPressure`/`isGuard`/`activationsPerTurn`，修正 rarity 枚举）
 4. **新增 content-loader**（`packages/schemas/src/content-loader.ts`）
 5. **新增 Set 和 ContentPack 清单**（`data/sets/core-v1.json` / `data/content-packs/base.json`）
-6. **44 个新 schema/loader 测试全部通过**，总计 250 个测试
+6. **schema/loader 测试已扩展并保持通过**（含 locale fallback 与 artKey 完整性断言）
 
 **旧数据完全兼容**：`data/cards/*.json`（v1）保持原位，server 继续正常运行。
 
@@ -169,7 +169,7 @@ data/
     text/
       zh-CN/             中文文案
         starter.json / fixed-supplies.json / status.json / market-core.json
-      en-US/             英文占位文案（最小内容）
+      en-US/             最小英文占位文案（starter/fixed/status/market-core）
         starter.json / fixed-supplies.json / status.json / market-core.json
 
   sets/
@@ -202,13 +202,13 @@ packages/schemas/
     index.ts                ← 修改：导出新增符号；SCHEMAS_VERSION 升至 0.1.0
     __tests__/
       validate.test.ts      ← 修改：更新 venue 兼容性测试（反映放宽后的 v1 schema 行为）
-      content-system.test.ts ← 新增：44 个测试覆盖 v2 schema + content-loader + locale 降级
+      content-system.test.ts ← 覆盖 v2 schema + content-loader + locale 降级 + artKey 完整性
 
 data/
   cards/
     rules/                  ← 新增：v2 规则真源（4 文件）
     text/zh-CN/             ← 新增：中文文案（4 文件）
-    text/en-US/             ← 新增：英文占位文案（4 文件）
+    text/en-US/             ← 最小英文占位文案（4 文件）
   sets/
     core-v1.json            ← 新增：核心卡牌集合清单
   content-packs/
@@ -230,7 +230,7 @@ data/rulesets/core-v1.json
 
 ## 测试覆盖
 
-共 **250 个测试**，全部通过：
+本仓库测试已覆盖 engine + schemas；本轮补充后，schemas 新增 locale fallback / artKey 完整性断言并通过。
 
 ### engine 包（190 个，本轮无变化）
 
@@ -247,13 +247,13 @@ data/rulesets/core-v1.json
 | delayedDiscard.test.ts | 19 |
 | **小计** | **190** |
 
-### schemas 包（60 个，本轮新增 44）
+### schemas 包（62 个，含内容系统补测）
 
 | 文件 | 测试数 | 本轮新增 |
 |------|--------|---------|
 | validate.test.ts | 16 | 0（1 个测试更新断言反映 v1 兼容性变化）|
-| **content-system.test.ts** | **44** | **+44** |
-| **小计** | **60** | **+44** |
+| **content-system.test.ts** | **46** | **含 locale fallback + artKey 完整性断言** |
+| **小计** | **62** | |
 
 ---
 
@@ -263,7 +263,7 @@ data/rulesets/core-v1.json
 
 1. **将 server 迁移到 v2 加载路径**：修改 `GameRoom.ts`，改为从 `data/cards/rules/*.json` 加载，删除对旧 flat 格式的依赖
 2. **补全 card-catalog.md 中其余卡牌的规则文件**：按 v2 格式批量补充 red/blue/green/neutral/white 其余牌
-3. **添加 en-US locale 完整翻译**（当前为机器翻译占位）
+3. **添加 en-US locale 完整翻译**（当前仅最小占位，不缺文件但仍需润色）
 
 ### 规则机制（原有优先级）
 
