@@ -1,6 +1,7 @@
 import Phaser from "phaser";
 import { RoomClient } from "../network/RoomClient";
 import type { PublicMatchView } from "@dev-camcard/protocol";
+import { preloadRuntimePlaceholders } from "../assets/runtimeAssets";
 
 /**
  * BootScene — 启动 + 连接场景
@@ -14,6 +15,11 @@ import type { PublicMatchView } from "@dev-camcard/protocol";
 export class BootScene extends Phaser.Scene {
   constructor() {
     super({ key: "BootScene" });
+  }
+
+
+  preload(): void {
+    preloadRuntimePlaceholders(this.load);
   }
 
   create(): void {

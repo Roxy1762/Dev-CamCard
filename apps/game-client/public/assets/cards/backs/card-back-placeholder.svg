@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="356" viewBox="0 0 256 356">
+  <rect width="256" height="356" rx="16" fill="#1f2a44"/>
+  <rect x="16" y="16" width="224" height="324" rx="12" fill="#24385f" stroke="#7aa2ff" stroke-width="3"/>
+  <text x="128" y="184" text-anchor="middle" fill="#d8e4ff" font-size="18" font-family="Arial, sans-serif">CARD BACK</text>
+</svg>
