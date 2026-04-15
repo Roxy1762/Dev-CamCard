@@ -61,7 +61,10 @@ export interface InternalPlayerState {
  */
 export interface MarketLaneState {
   lane: Lane;
+  /** 当前公开的槽位（最多 marketSlotsPerLane 张） */
   slots: (CardInstance | null)[];
+  /** 该栏剩余的隐藏牌堆，买走后从此补位；deck[0] 为栈顶 */
+  deck: CardInstance[];
 }
 
 /**
