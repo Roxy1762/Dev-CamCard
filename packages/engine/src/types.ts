@@ -18,8 +18,13 @@ export interface VenueState {
   cardId: string;
   owner: PlayerSide;
   isGuard: boolean;
+  /** 当前剩余耐久（受到攻击时减少；回合结束未被摧毁时重置为 maxDurability） */
   durability: number;
+  /** 最大耐久值（打出时从 CardDef 读取，不变） */
+  maxDurability: number;
+  /** 本回合剩余可启动次数（进场当回合为 0） */
   activationsLeft: number;
+  /** 每回合最多启动次数 */
   activationsPerTurn: number;
 }
 

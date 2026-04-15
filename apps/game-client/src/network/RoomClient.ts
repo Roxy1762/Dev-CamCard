@@ -1,20 +1,17 @@
 import { Client, type Room } from "colyseus.js";
-import type { PublicMatchView } from "@dev-camcard/protocol";
+import type { PublicMatchView, PrivatePlayerView, ClientCommand } from "@dev-camcard/protocol";
 import { EVT } from "@dev-camcard/protocol";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "ws://localhost:2567";
 
 export type StateUpdateHandler = (view: PublicMatchView) => void;
+export type PrivateUpdateHandler = (view: PrivatePlayerView) => void;
 
 /**
  * RoomClient — Colyseus 连接封装。
  *
- * 当前阶段：使用消息（onMessage）接收服务端推送的 PublicMatchView 快照。
- * 后续将迁移到 @colyseus/schema 状态同步，
- * 届时可无缝替换此处的实现而不影响上层调用方。
- *
  * 分层约束（non-negotiables.md）：
- *  - 客户端只接收公开视图，私有手牌通过独立消息接收
+ *  - 客户端只接收公开视图与己方私有视图
  *  - 客户端只发送 Command，不发送结算结果
  */
 export class RoomClient {
@@ -22,10 +19,16 @@ export class RoomClient {
   private room: Room<unknown> | null = null;
 
   /**
-   * 状态更新回调 — 可在连接后替换（供 RoomScene 更新自身 UI）。
-   * 每次收到 state_update 消息时调用。
+   * 公开状态更新回调 — 每次收到 state_update 时调用。
+   * 可在连接后替换（供 RoomScene 更新自身 UI）。
    */
   public onStateUpdate: StateUpdateHandler | null = null;
+
+  /**
+   * 私有视图更新回调 — 每次收到 private_update 时调用。
+   * 包含己方手牌等私有信息。
+   */
+  public onPrivateUpdate: PrivateUpdateHandler | null = null;
 
   constructor(serverUrl: string = SERVER_URL) {
     this.client = new Client(serverUrl);
@@ -33,7 +36,6 @@ export class RoomClient {
 
   /**
    * 加入或创建房间，并注册内部状态转发。
-   * 初始状态将通过 onStateUpdate 回调推送。
    */
   async joinOrCreate(
     roomName: string,
@@ -44,6 +46,21 @@ export class RoomClient {
     this.room.onMessage(EVT.STATE_UPDATE, (msg: PublicMatchView) => {
       this.onStateUpdate?.(msg);
     });
+
+    this.room.onMessage(EVT.PRIVATE_UPDATE, (msg: PrivatePlayerView) => {
+      this.onPrivateUpdate?.(msg);
+    });
+  }
+
+  /**
+   * 向服务端发送命令。
+   * Colyseus 的 send(type, payload) 会被服务端的 onMessage("*", ...) 接收，
+   * 服务端重建 { type, ...payload } 后交给 engine.reduce。
+   */
+  send<T extends ClientCommand>(command: T): void {
+    if (!this.room) return;
+    const { type, ...payload } = command as { type: string } & Record<string, unknown>;
+    this.room.send(type, payload);
   }
 
   /** 主动离开房间 */
@@ -51,6 +68,7 @@ export class RoomClient {
     this.room?.leave();
     this.room = null;
     this.onStateUpdate = null;
+    this.onPrivateUpdate = null;
   }
 
   get roomId(): string | null {

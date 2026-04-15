@@ -6,8 +6,7 @@ import { draw } from "./deck";
 /**
  * CardEffect — 卡牌效果的 discriminated union。
  *
- * 本轮支持范围（docs/claude-first-round-3-tasks.md）：
- *   gainResource / gainAttack / gainBlock / heal / draw / drawThenDiscard
+ * 支持：gainResource / gainAttack / gainBlock / heal / draw / drawThenDiscard
  */
 export type CardEffect =
   | { op: "gainResource"; amount: number }
@@ -18,8 +17,13 @@ export type CardEffect =
   | { op: "drawThenDiscard"; count: number };
 
 export interface CardAbility {
-  /** 触发时机，当前只处理 onPlay */
-  trigger: "onPlay";
+  /**
+   * 触发时机：
+   *  - onPlay           打出时
+   *  - onScheduleResolve 安排牌在下回合开始结算时
+   *  - onActivate       场馆启动时
+   */
+  trigger: "onPlay" | "onScheduleResolve" | "onActivate";
   effects: CardEffect[];
 }
 
@@ -27,11 +31,18 @@ export interface CardAbility {
  * CardDef — 卡牌效果定义（从 data/cards/*.json 加载后注入引擎）。
  *
  * 只保留引擎需要的字段；完整卡面文案、费用等由 server 层管理。
+ * 场馆专用字段（isGuard / durability / activationsPerTurn）仅在 type="venue" 时有意义。
  */
 export interface CardDef {
   id: string;
   type: "action" | "venue";
   abilities: CardAbility[];
+  /** 场馆：是否为值守场馆（存在时对手必须优先攻击） */
+  isGuard?: boolean;
+  /** 场馆：最大耐久值 */
+  durability?: number;
+  /** 场馆：每回合最多启动次数（默认 1） */
+  activationsPerTurn?: number;
 }
 
 // ── Effect interpreter ────────────────────────────────────────────────────────

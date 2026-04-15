@@ -580,3 +580,346 @@ describe("reduce: ASSIGN_ATTACK", () => {
     expect(state.winner).toBe(0);
   });
 });
+
+// ── PUT_CARD_TO_SCHEDULE ──────────────────────────────────────────────────────
+
+describe("reduce: PUT_CARD_TO_SCHEDULE", () => {
+  function stateWithCardInHand(
+    cardId: string,
+    instanceId = "sched-card"
+  ): InternalMatchState {
+    const base = startedState();
+    const card: CardInstance = { instanceId, cardId };
+    const players: [InternalPlayerState, InternalPlayerState] = [
+      { ...base.players[0], hand: [card] },
+      base.players[1],
+    ];
+    return { ...base, players };
+  }
+
+  it("可将手牌放入空日程槽", () => {
+    const state = stateWithCardInHand("starter_allowance");
+    const result = reduce(
+      state, 0,
+      { type: "PUT_CARD_TO_SCHEDULE", instanceId: "sched-card", slotIndex: 0 },
+      CONFIG
+    );
+    expect(result.players[0].scheduleSlots[0]).toMatchObject({ instanceId: "sched-card" });
+    expect(result.players[0].hand).toHaveLength(0);
+  });
+
+  it("日程槽已占用时抛出错误", () => {
+    const base = stateWithCardInHand("starter_allowance");
+    const occupier: CardInstance = { instanceId: "occupier", cardId: "starter_quarrel" };
+    const state: InternalMatchState = {
+      ...base,
+      players: [
+        { ...base.players[0], scheduleSlots: [occupier, null] },
+        base.players[1],
+      ],
+    };
+    expect(() =>
+      reduce(state, 0, { type: "PUT_CARD_TO_SCHEDULE", instanceId: "sched-card", slotIndex: 0 }, CONFIG)
+    ).toThrow();
+  });
+
+  it("手牌中不存在时抛出错误", () => {
+    const state = stateWithCardInHand("starter_allowance");
+    expect(() =>
+      reduce(state, 0, { type: "PUT_CARD_TO_SCHEDULE", instanceId: "no-such-card", slotIndex: 1 }, CONFIG)
+    ).toThrow();
+  });
+
+  it("下一回合开始时结算日程槽并移入弃牌堆", () => {
+    // 将 starter_allowance（onScheduleResolve 无效果，但 onPlay gainResource 2）放入日程槽
+    // 我们需要一张有 onScheduleResolve 效果的卡
+    // 使用自定义 CONFIG
+    const schedCard: CardInstance = { instanceId: "sc-inst", cardId: "red_pre_match_warmup_test" };
+    const extraDefs: Record<string, typeof CARD_DEFS[string]> = {
+      red_pre_match_warmup_test: {
+        id: "red_pre_match_warmup_test",
+        type: "action",
+        abilities: [
+          { trigger: "onPlay", effects: [{ op: "gainAttack", amount: 1 }] },
+          { trigger: "onScheduleResolve", effects: [{ op: "gainAttack", amount: 3 }] },
+        ],
+      },
+    };
+    const testConfig: EngineConfig = {
+      ...CONFIG,
+      getCardDef: (id) => extraDefs[id] ?? CARD_DEFS[id],
+    };
+
+    let state = startedState();
+    // 手动放入日程槽
+    const players: [InternalPlayerState, InternalPlayerState] = [
+      { ...state.players[0], scheduleSlots: [schedCard, null] },
+      state.players[1],
+    ];
+    state = { ...state, players };
+
+    // 结束 side=0 的回合 → beginTurn(side=1) → 然后 side=1 结束 → beginTurn(side=0) 结算日程槽
+    state = reduce(state, 0, { type: "END_TURN" }, testConfig, deterministicRandom, genId);
+    // 现在是 side=1 的回合，日程槽未结算（只有在 side=0 的回合开始时结算）
+    expect(state.players[0].scheduleSlots[0]).not.toBeNull();
+
+    state = reduce(state, 1, { type: "END_TURN" }, testConfig, deterministicRandom, genId);
+    // 现在是 side=0 的回合开始：日程槽应已结算（gainAttack 3）并移入弃牌堆
+    expect(state.players[0].scheduleSlots[0]).toBeNull();
+    expect(state.players[0].attackPool).toBe(3);
+    expect(state.players[0].discard.some((c) => c.instanceId === "sc-inst")).toBe(true);
+  });
+});
+
+// ── PLAY_CARD (venue) ─────────────────────────────────────────────────────────
+
+describe("reduce: PLAY_CARD (venue)", () => {
+  const VENUE_DEFS: Record<string, import("../effects").CardDef> = {
+    test_guard_venue: {
+      id: "test_guard_venue",
+      type: "venue",
+      isGuard: true,
+      durability: 4,
+      activationsPerTurn: 1,
+      abilities: [{ trigger: "onActivate", effects: [{ op: "gainBlock", amount: 1 }] }],
+    },
+    test_normal_venue: {
+      id: "test_normal_venue",
+      type: "venue",
+      isGuard: false,
+      durability: 3,
+      activationsPerTurn: 1,
+      abilities: [{ trigger: "onActivate", effects: [{ op: "gainResource", amount: 2 }] }],
+    },
+  };
+
+  const venueConfig: EngineConfig = {
+    ...CONFIG,
+    getCardDef: (id) => VENUE_DEFS[id] ?? CARD_DEFS[id],
+  };
+
+  function stateWithVenueInHand(cardId = "test_guard_venue"): InternalMatchState {
+    const base = startedState();
+    const card: CardInstance = { instanceId: "v-inst", cardId };
+    const players: [InternalPlayerState, InternalPlayerState] = [
+      { ...base.players[0], hand: [card] },
+      base.players[1],
+    ];
+    return { ...base, players };
+  }
+
+  it("打出场馆牌后进入场馆区，不进入 played 区", () => {
+    const state = stateWithVenueInHand("test_guard_venue");
+    const result = reduce(state, 0, { type: "PLAY_CARD", instanceId: "v-inst" }, venueConfig);
+    expect(result.players[0].venues).toHaveLength(1);
+    expect(result.players[0].venues[0].cardId).toBe("test_guard_venue");
+    expect(result.players[0].played).toHaveLength(0);
+    expect(result.players[0].hand).toHaveLength(0);
+  });
+
+  it("场馆进场后 activationsLeft=0（不能当回合启动）", () => {
+    const state = stateWithVenueInHand("test_guard_venue");
+    const result = reduce(state, 0, { type: "PLAY_CARD", instanceId: "v-inst" }, venueConfig);
+    expect(result.players[0].venues[0].activationsLeft).toBe(0);
+  });
+
+  it("场馆进场后 isGuard 正确设置", () => {
+    const state = stateWithVenueInHand("test_guard_venue");
+    const result = reduce(state, 0, { type: "PLAY_CARD", instanceId: "v-inst" }, venueConfig);
+    expect(result.players[0].venues[0].isGuard).toBe(true);
+  });
+});
+
+// ── ACTIVATE_VENUE ────────────────────────────────────────────────────────────
+
+describe("reduce: ACTIVATE_VENUE", () => {
+  const VENUE_DEFS: Record<string, import("../effects").CardDef> = {
+    test_resource_venue: {
+      id: "test_resource_venue",
+      type: "venue",
+      isGuard: false,
+      durability: 3,
+      activationsPerTurn: 1,
+      abilities: [{ trigger: "onActivate", effects: [{ op: "gainResource", amount: 2 }] }],
+    },
+  };
+  const venueConfig: EngineConfig = {
+    ...CONFIG,
+    getCardDef: (id) => VENUE_DEFS[id] ?? CARD_DEFS[id],
+  };
+
+  function stateWithVenueReady(activationsLeft = 1): InternalMatchState {
+    const base = startedState();
+    const venue: import("../types").VenueState = {
+      instanceId: "venue-ready",
+      cardId: "test_resource_venue",
+      owner: 0,
+      isGuard: false,
+      durability: 3,
+      maxDurability: 3,
+      activationsLeft,
+      activationsPerTurn: 1,
+    };
+    const players: [InternalPlayerState, InternalPlayerState] = [
+      { ...base.players[0], venues: [venue] },
+      base.players[1],
+    ];
+    return { ...base, players };
+  }
+
+  it("启动场馆后获得效果，activationsLeft 减 1", () => {
+    const state = stateWithVenueReady(1);
+    const result = reduce(state, 0, { type: "ACTIVATE_VENUE", instanceId: "venue-ready" }, venueConfig);
+    expect(result.players[0].resourcePool).toBe(2);
+    expect(result.players[0].venues[0].activationsLeft).toBe(0);
+  });
+
+  it("activationsLeft=0 时启动抛出错误", () => {
+    const state = stateWithVenueReady(0);
+    expect(() =>
+      reduce(state, 0, { type: "ACTIVATE_VENUE", instanceId: "venue-ready" }, venueConfig)
+    ).toThrow();
+  });
+
+  it("下一回合开始后 activationsLeft 重置为 activationsPerTurn", () => {
+    // 进场 → activationsLeft=0 → END_TURN × 2 → 回到 side=0 → activationsLeft=1
+    const base = startedState();
+    const card: CardInstance = { instanceId: "v-inst", cardId: "test_resource_venue" };
+    let state: InternalMatchState = {
+      ...base,
+      players: [{ ...base.players[0], hand: [card] }, base.players[1]],
+    };
+    state = reduce(state, 0, { type: "PLAY_CARD", instanceId: "v-inst" }, venueConfig);
+    expect(state.players[0].venues[0].activationsLeft).toBe(0); // 进场当回合不能启动
+
+    state = reduce(state, 0, { type: "END_TURN" }, venueConfig, deterministicRandom, genId);
+    state = reduce(state, 1, { type: "END_TURN" }, venueConfig, deterministicRandom, genId);
+    // 回到 side=0 的回合，beginTurn 重置 activationsLeft
+    expect(state.players[0].venues[0].activationsLeft).toBe(1);
+  });
+});
+
+// ── ASSIGN_ATTACK (venue + guard) ─────────────────────────────────────────────
+
+describe("reduce: ASSIGN_ATTACK (venue & guard)", () => {
+  function stateForVenueAttack(
+    attackPool: number,
+    venueDurability: number,
+    isGuard: boolean
+  ): InternalMatchState {
+    const base = startedState();
+    const venue: import("../types").VenueState = {
+      instanceId: "opp-venue",
+      cardId: "test_venue",
+      owner: 1,
+      isGuard,
+      durability: venueDurability,
+      maxDurability: venueDurability,
+      activationsLeft: 1,
+      activationsPerTurn: 1,
+    };
+    const players: [InternalPlayerState, InternalPlayerState] = [
+      { ...base.players[0], attackPool },
+      { ...base.players[1], venues: [venue] },
+    ];
+    return { ...base, players };
+  }
+
+  it("攻击场馆：耐久减少", () => {
+    const state = stateForVenueAttack(3, 5, false);
+    const result = reduce(state, 0, {
+      type: "ASSIGN_ATTACK",
+      assignments: [{ amount: 3, target: "venue", targetSide: 1, venueInstanceId: "opp-venue" }],
+    }, CONFIG);
+    expect(result.players[1].venues[0].durability).toBe(2);
+    expect(result.players[0].attackPool).toBe(0);
+  });
+
+  it("攻击场馆：耐久归零时摧毁，移入弃牌堆", () => {
+    const state = stateForVenueAttack(5, 3, false);
+    const result = reduce(state, 0, {
+      type: "ASSIGN_ATTACK",
+      assignments: [{ amount: 5, target: "venue", targetSide: 1, venueInstanceId: "opp-venue" }],
+    }, CONFIG);
+    expect(result.players[1].venues).toHaveLength(0);
+    expect(result.players[1].discard.some((c) => c.instanceId === "opp-venue")).toBe(true);
+  });
+
+  it("有值守场馆时攻击玩家抛出错误", () => {
+    const state = stateForVenueAttack(5, 4, true); // isGuard=true
+    expect(() =>
+      reduce(state, 0, {
+        type: "ASSIGN_ATTACK",
+        assignments: [{ amount: 5, target: "player", targetSide: 1 }],
+      }, CONFIG)
+    ).toThrow();
+  });
+
+  it("有值守场馆时可以攻击值守场馆本身", () => {
+    const state = stateForVenueAttack(5, 4, true);
+    expect(() =>
+      reduce(state, 0, {
+        type: "ASSIGN_ATTACK",
+        assignments: [{ amount: 5, target: "venue", targetSide: 1, venueInstanceId: "opp-venue" }],
+      }, CONFIG)
+    ).not.toThrow();
+  });
+
+  it("有值守场馆时攻击非守卫场馆抛出错误", () => {
+    // 设置：对方有一个 guard venue 和一个普通 venue
+    const base = startedState();
+    const guardVenue: import("../types").VenueState = {
+      instanceId: "guard-v", cardId: "guard_v", owner: 1, isGuard: true,
+      durability: 4, maxDurability: 4, activationsLeft: 1, activationsPerTurn: 1,
+    };
+    const normalVenue: import("../types").VenueState = {
+      instanceId: "normal-v", cardId: "normal_v", owner: 1, isGuard: false,
+      durability: 3, maxDurability: 3, activationsLeft: 1, activationsPerTurn: 1,
+    };
+    const state: InternalMatchState = {
+      ...base,
+      players: [
+        { ...base.players[0], attackPool: 5 },
+        { ...base.players[1], venues: [guardVenue, normalVenue] },
+      ],
+    };
+    expect(() =>
+      reduce(state, 0, {
+        type: "ASSIGN_ATTACK",
+        assignments: [{ amount: 3, target: "venue", targetSide: 1, venueInstanceId: "normal-v" }],
+      }, CONFIG)
+    ).toThrow();
+  });
+
+  it("摧毁值守场馆后可攻击玩家（需两次命令）", () => {
+    // 第一命令：摧毁值守场馆（耐久 3）
+    const state = stateForVenueAttack(5, 3, true);
+    let s = reduce(state, 0, {
+      type: "ASSIGN_ATTACK",
+      assignments: [{ amount: 3, target: "venue", targetSide: 1, venueInstanceId: "opp-venue" }],
+    }, CONFIG);
+    expect(s.players[1].venues).toHaveLength(0); // 场馆已摧毁
+
+    // 第二命令：现在可以攻击玩家（还有 2 攻击力）
+    expect(() =>
+      reduce(s, 0, {
+        type: "ASSIGN_ATTACK",
+        assignments: [{ amount: 2, target: "player", targetSide: 1 }],
+      }, CONFIG)
+    ).not.toThrow();
+  });
+
+  it("回合开始时场馆耐久重置（伤害不保留）", () => {
+    // side=0 攻击但未摧毁场馆，场馆在 side=1 回合开始时重置耐久
+    const state = stateForVenueAttack(2, 5, false);
+    let s = reduce(state, 0, {
+      type: "ASSIGN_ATTACK",
+      assignments: [{ amount: 2, target: "venue", targetSide: 1, venueInstanceId: "opp-venue" }],
+    }, CONFIG);
+    expect(s.players[1].venues[0].durability).toBe(3); // 5 - 2 = 3
+
+    // END_TURN → beginTurn(side=1) → side=1 的场馆耐久重置
+    s = reduce(s, 0, { type: "END_TURN" }, CONFIG, deterministicRandom, genId);
+    expect(s.players[1].venues[0].durability).toBe(5); // 重置为 maxDurability
+  });
+});

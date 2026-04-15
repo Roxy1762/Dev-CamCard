@@ -1,26 +1,74 @@
 import type { PlayerSide } from "@dev-camcard/protocol";
-import type { InternalMatchState, InternalPlayerState } from "./types";
+import type { InternalMatchState, InternalPlayerState, VenueState } from "./types";
+import type { CardDef } from "./effects";
+import { applyEffects } from "./effects";
 import { draw } from "./deck";
+
+/** 最小配置接口，供 beginTurn 做日程结算与场馆重置 */
+export interface TurnConfig {
+  hp: number;
+  getCardDef: (id: string) => CardDef | undefined;
+}
 
 /**
  * beginTurn — 新回合开始时的清理操作（纯函数）。
  *
- * 按 game-rules.md "回合开始" 顺序（MVP 实现范围）：
- *  1. 清空当前玩家残留防备
- *  2. 处理延迟效果（TODO 下一轮）
- *  3. 重置场馆启动次数（TODO 下一轮）
- *  4. 结算日程槽安排牌（TODO 下一轮）
+ * 按 game-rules.md "回合开始" 顺序：
+ *  1. 清空当前玩家残留防备，重置资源/攻击池
+ *  2. 重置场馆启动次数 + 恢复场馆耐久（耐久伤害不保留）
+ *  3. 结算日程槽安排牌（若提供 config）
+ *
+ * @param state   当前内部对局状态
+ * @param config  可选：规则配置（用于日程结算）
+ * @param random  随机数函数（用于日程结算中可能的摸牌效果）
  */
-export function beginTurn(state: InternalMatchState): InternalMatchState {
+export function beginTurn(
+  state: InternalMatchState,
+  config?: TurnConfig,
+  random: () => number = Math.random
+): InternalMatchState {
   const idx = state.activePlayer;
   const player = state.players[idx];
 
-  const updated: InternalPlayerState = {
+  // ── 1. 清空防备、重置资源/攻击 ───────────────────────────────────────────────
+  let updated: InternalPlayerState = {
     ...player,
-    block: 0,          // 1. 清空防备
-    resourcePool: 0,   // 新回合资源重置
-    attackPool: 0,     // 新回合攻击重置
+    block: 0,
+    resourcePool: 0,
+    attackPool: 0,
   };
+
+  // ── 2. 重置场馆启动次数 + 恢复耐久 ──────────────────────────────────────────
+  const resetVenues: VenueState[] = updated.venues.map((v) => ({
+    ...v,
+    activationsLeft: v.activationsPerTurn,
+    durability: v.maxDurability,
+  }));
+  updated = { ...updated, venues: resetVenues };
+
+  // ── 3. 结算日程槽 ────────────────────────────────────────────────────────────
+  if (config) {
+    const newSlots = [...updated.scheduleSlots] as (typeof updated.scheduleSlots);
+    for (let i = 0; i < newSlots.length; i++) {
+      const slot = newSlots[i];
+      if (!slot) continue;
+
+      const cardDef = config.getCardDef(slot.cardId);
+      if (cardDef) {
+        for (const ability of cardDef.abilities) {
+          if (ability.trigger === "onScheduleResolve") {
+            updated = applyEffects(updated, ability.effects, random, config.hp);
+          }
+        }
+      }
+      // 结算后移入弃牌堆，腾出槽位
+      updated = {
+        ...updated,
+        discard: [...updated.discard, slot],
+        scheduleSlots: updated.scheduleSlots.map((s, si) => (si === i ? null : s)) as typeof newSlots,
+      };
+    }
+  }
 
   const players = [
     state.players[0],
@@ -46,11 +94,13 @@ export function beginTurn(state: InternalMatchState): InternalMatchState {
  * @param state    当前对局状态
  * @param handSize 目标手牌数（来自 ruleset.handSize = 5）
  * @param random   随机数函数（注入，便于测试确定性）
+ * @param config   可选：传给 beginTurn 做日程结算
  */
 export function endTurn(
   state: InternalMatchState,
   handSize: number,
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  config?: TurnConfig
 ): InternalMatchState {
   const idx = state.activePlayer;
   const player = state.players[idx];
@@ -88,6 +138,6 @@ export function endTurn(
     turnNumber: nextTurnNumber,
   };
 
-  // 开始下一玩家的回合
-  return beginTurn(afterSwitch);
+  // 开始下一玩家的回合（含日程结算 + 场馆重置）
+  return beginTurn(afterSwitch, config, random);
 }
