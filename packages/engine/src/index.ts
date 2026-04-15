@@ -24,6 +24,7 @@ export * from "./types";
 export * from "./deck";
 export * from "./turn";
 export * from "./market";
+export * from "./effects";
 export * from "./projections";
 export * from "./init";
 export * from "./reduce";

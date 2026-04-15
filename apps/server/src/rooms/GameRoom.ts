@@ -9,7 +9,7 @@ import {
   toPublicMatchView,
   toPrivatePlayerView,
 } from "@dev-camcard/engine";
-import type { InternalMatchState, RulesetConfig, EngineConfig } from "@dev-camcard/engine";
+import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef } from "@dev-camcard/engine";
 
 // ── 数据加载（模块级，仅执行一次）────────────────────────────────────────────
 
@@ -22,24 +22,35 @@ function loadJson<T>(relativePath: string): T {
   return JSON.parse(fs.readFileSync(fullPath, "utf-8")) as T;
 }
 
-interface CardDef {
+interface RawCardJson {
   id: string;
   cost: number;
+  type: "action" | "venue";
+  abilities: CardDef["abilities"];
 }
 
-const starterCards: CardDef[] = loadJson("cards/starter.json");
-const supplyCards: CardDef[] = loadJson("cards/fixed-supplies.json");
+const starterCards: RawCardJson[] = loadJson("cards/starter.json");
+const supplyCards: RawCardJson[] = loadJson("cards/fixed-supplies.json");
 const ruleset: RulesetConfig = loadJson("rulesets/core-v1.json");
 
 // cardId → cost 查找表
 const costMap = new Map<string, number>();
+// cardId → CardDef 查找表
+const cardDefMap = new Map<string, CardDef>();
+
 for (const c of [...starterCards, ...supplyCards]) {
   costMap.set(c.id, c.cost);
+  cardDefMap.set(c.id, {
+    id: c.id,
+    type: c.type,
+    abilities: c.abilities ?? [],
+  });
 }
 
 const ENGINE_CONFIG: EngineConfig = {
   ruleset,
   getCardCost: (cardId) => costMap.get(cardId) ?? 0,
+  getCardDef: (cardId) => cardDefMap.get(cardId),
 };
 
 // ── GameRoom ──────────────────────────────────────────────────────────────────
