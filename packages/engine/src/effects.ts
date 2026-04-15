@@ -25,7 +25,13 @@ export type CardEffect =
   /** 设置玩家标志位（用于条件效果，如 nextBoughtCardToDeckTop） */
   | { op: "setFlag"; flag: string }
   /** 直接获取一张特定牌入手（MVP：no-op 占位，需确定来源） */
-  | { op: "gainFaceUpCard"; cardId: string };
+  | { op: "gainFaceUpCard"; cardId: string }
+  /**
+   * 让目标玩家在下回合开始时弃 count 张手牌。
+   * 多次叠加累加到 pendingDiscardCount，beginTurn 时统一结算。
+   * target 默认为 "opponent"（对手）。
+   */
+  | { op: "queueDelayedDiscard"; count: number; target?: "opponent" | "self" };
 
 // ── Condition 类型定义 ────────────────────────────────────────────────────────
 
@@ -229,13 +235,16 @@ export function applyStateEffects(
   maxHp: number,
   genId: () => string
 ): InternalMatchState {
-  // 区分自我效果和状态级效果
+  // 区分自我效果和状态级效果（需要访问双方玩家的效果）
   const selfEffects: CardEffect[] = [];
   const pressureEffects: Array<{ op: "createPressure"; count: number; target?: "opponent" | "self" }> = [];
+  const delayedDiscardEffects: Array<{ op: "queueDelayedDiscard"; count: number; target?: "opponent" | "self" }> = [];
 
   for (const effect of effects) {
     if (effect.op === "createPressure") {
       pressureEffects.push(effect as { op: "createPressure"; count: number; target?: "opponent" | "self" });
+    } else if (effect.op === "queueDelayedDiscard") {
+      delayedDiscardEffects.push(effect as { op: "queueDelayedDiscard"; count: number; target?: "opponent" | "self" });
     } else {
       selfEffects.push(effect);
     }
@@ -262,6 +271,20 @@ export function applyStateEffects(
     const updatedTarget = {
       ...targetPlayer,
       hand: [...targetPlayer.hand, ...pressureCards],
+    };
+    const players = cloneStatePlayers(s);
+    players[targetSide] = updatedTarget;
+    s = { ...s, players };
+  }
+
+  // 3. 处理延迟弃牌效果
+  for (const dd of delayedDiscardEffects) {
+    const targetSide: PlayerSide =
+      dd.target === "self" ? activeSide : (activeSide === 0 ? 1 : 0);
+    const targetPlayer = s.players[targetSide];
+    const updatedTarget = {
+      ...targetPlayer,
+      pendingDiscardCount: targetPlayer.pendingDiscardCount + dd.count,
     };
     const players = cloneStatePlayers(s);
     players[targetSide] = updatedTarget;

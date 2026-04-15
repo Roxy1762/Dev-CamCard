@@ -28,6 +28,7 @@ function makePlayer(side: 0 | 1, overrides: Partial<InternalPlayerState> = {}): 
     reservedCardTurn: null,
     hasReservedThisTurn: false,
     activeFlags: [],
+    pendingDiscardCount: 0,
     ...overrides,
   };
 }

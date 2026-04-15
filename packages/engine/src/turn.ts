@@ -41,6 +41,19 @@ export function beginTurn(
     hasReservedThisTurn: false,  // 新回合重置预约标志
   };
 
+  // ── 1b. 结算延迟弃牌（上回合对手造成的 queueDelayedDiscard 效果）──────────────
+  if (updated.pendingDiscardCount > 0) {
+    const discardCount = Math.min(updated.pendingDiscardCount, updated.hand.length);
+    const toDiscard = updated.hand.slice(0, discardCount);
+    const remaining = updated.hand.slice(discardCount);
+    updated = {
+      ...updated,
+      hand: remaining,
+      discard: [...updated.discard, ...toDiscard],
+      pendingDiscardCount: 0,
+    };
+  }
+
   // ── 2. 重置场馆启动次数 + 恢复耐久 ──────────────────────────────────────────
   const resetVenues: VenueState[] = updated.venues.map((v) => ({
     ...v,
