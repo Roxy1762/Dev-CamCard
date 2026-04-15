@@ -3,10 +3,10 @@ import { CMD } from "@dev-camcard/protocol";
 import type { CardInstance, InternalMatchState, InternalPlayerState, VenueState } from "./types";
 import type { RulesetConfig } from "./init";
 import type { CardDef } from "./effects";
-import { applyEffects } from "./effects";
+import { applyEffects, applyStateEffects, checkCondition } from "./effects";
 import { draw, shuffle } from "./deck";
 import { endTurn } from "./turn";
-import { buyFromMarket, buyFixedSupply } from "./market";
+import { buyFromMarket, buyFixedSupply, reserveFromMarket, buyReservedCard } from "./market";
 
 /**
  * EngineConfig — reduce 调用时注入的引擎配置。
@@ -50,7 +50,24 @@ export function reduce(
     case CMD.ACTIVATE_VENUE:
       assertActive(state, side);
       assertStarted(state);
-      return handleActivateVenue(state, side, command.instanceId, config, random);
+      return handleActivateVenue(state, side, command.instanceId, config, random, genId);
+
+    case CMD.RESERVE_MARKET_CARD:
+      assertActive(state, side);
+      assertStarted(state);
+      return reserveFromMarket(state, side, command.instanceId, state.turnNumber);
+
+    case CMD.BUY_RESERVED_CARD: {
+      assertActive(state, side);
+      assertStarted(state);
+      const player = state.players[side];
+      if (!player.reservedCard) {
+        throw new Error("预约位为空，没有可购买的预约牌");
+      }
+      const baseCost = config.getCardCost(player.reservedCard.cardId);
+      const cost = Math.max(0, baseCost - 1);
+      return buyReservedCard(state, side, cost);
+    }
 
     case CMD.ASSIGN_ATTACK:
       assertActive(state, side);
@@ -63,6 +80,7 @@ export function reduce(
       return endTurn(state, config.ruleset.handSize, random, {
         hp: config.ruleset.hp,
         getCardDef: config.getCardDef,
+        genId,
       });
 
     case CMD.BUY_MARKET_CARD: {
@@ -75,14 +93,19 @@ export function reduce(
         throw new Error(`商店中未找到卡牌实例: ${command.instanceId}`);
       }
       const cost = config.getCardCost(slot.cardId);
-      return buyFromMarket(state, side, command.instanceId, cost);
+      let newState = buyFromMarket(state, side, command.instanceId, cost);
+      // 处理 nextBoughtCardToDeckTop 标志
+      newState = applyBuyFlag(newState, side);
+      return newState;
     }
 
     case CMD.BUY_FIXED_SUPPLY: {
       assertActive(state, side);
       assertStarted(state);
       const cost = config.getCardCost(command.cardId);
-      return buyFixedSupply(state, side, command.cardId, cost, genId);
+      let newState = buyFixedSupply(state, side, command.cardId, cost, genId);
+      newState = applyBuyFlag(newState, side);
+      return newState;
     }
 
     case CMD.CONCEDE:
@@ -93,7 +116,7 @@ export function reduce(
       };
 
     default:
-      // 未实现的命令（如 RESERVE_MARKET_CARD、BUY_RESERVED_CARD）暂时为 no-op
+      // 未知命令 — no-op（防御性处理）
       return state;
   }
 }
@@ -106,7 +129,7 @@ function handlePlayCard(
   instanceId: string,
   config: EngineConfig,
   random: () => number,
-  _genId: () => string
+  genId: () => string
 ): InternalMatchState {
   const player = state.players[side];
   const cardIdx = player.hand.findIndex((c) => c.instanceId === instanceId);
@@ -120,6 +143,11 @@ function handlePlayCard(
 
   if (!cardDef) {
     throw new Error(`未找到卡牌定义: ${card.cardId}`);
+  }
+
+  // 压力牌不可打出
+  if (cardDef.isPressure) {
+    throw new Error(`压力牌不可打出: ${card.cardId}`);
   }
 
   const newHand = player.hand.filter((_, i) => i !== cardIdx);
@@ -156,15 +184,28 @@ function handlePlayCard(
     played: [...player.played, card],
   };
 
+  let s = state;
   for (const ability of cardDef.abilities) {
-    if (ability.trigger === "onPlay") {
-      updatedPlayer = applyEffects(updatedPlayer, ability.effects, random, config.ruleset.hp);
+    if (ability.trigger !== "onPlay") continue;
+
+    // 条件检查（用当前 updatedPlayer 状态）
+    if (ability.condition && !checkCondition(updatedPlayer, ability.condition)) {
+      continue;
     }
+
+    // 用 applyStateEffects 统一处理（支持 createPressure 等双方效果）
+    // 先把 updatedPlayer 写回 state 再传给 applyStateEffects
+    const players = clonePlayers(s);
+    players[side] = updatedPlayer;
+    s = { ...s, players };
+    s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId);
+    updatedPlayer = s.players[side];
   }
 
-  const players = clonePlayers(state);
-  players[side] = updatedPlayer;
-  return { ...state, players };
+  // 确保最终写回
+  const finalPlayers = clonePlayers(s);
+  finalPlayers[side] = updatedPlayer;
+  return { ...s, players: finalPlayers };
 }
 
 // ── PUT_CARD_TO_SCHEDULE ──────────────────────────────────────────────────────
@@ -213,7 +254,8 @@ function handleActivateVenue(
   side: PlayerSide,
   instanceId: string,
   config: EngineConfig,
-  random: () => number
+  random: () => number,
+  genId: () => string
 ): InternalMatchState {
   const player = state.players[side];
 
@@ -233,19 +275,27 @@ function handleActivateVenue(
   );
   let updatedPlayer: InternalPlayerState = { ...player, venues: newVenues };
 
-  // 应用 onActivate 效果
   const cardDef = config.getCardDef(venue.cardId);
-  if (cardDef) {
-    for (const ability of cardDef.abilities) {
-      if (ability.trigger === "onActivate") {
-        updatedPlayer = applyEffects(updatedPlayer, ability.effects, random, config.ruleset.hp);
-      }
+  if (!cardDef) return state;
+
+  let s = state;
+  for (const ability of cardDef.abilities) {
+    if (ability.trigger !== "onActivate") continue;
+
+    if (ability.condition && !checkCondition(updatedPlayer, ability.condition)) {
+      continue;
     }
+
+    const players = clonePlayers(s);
+    players[side] = updatedPlayer;
+    s = { ...s, players };
+    s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId);
+    updatedPlayer = s.players[side];
   }
 
-  const players = clonePlayers(state);
-  players[side] = updatedPlayer;
-  return { ...state, players };
+  const finalPlayers = clonePlayers(s);
+  finalPlayers[side] = updatedPlayer;
+  return { ...s, players: finalPlayers };
 }
 
 // ── ASSIGN_ATTACK ─────────────────────────────────────────────────────────────
@@ -258,14 +308,13 @@ function handleAssignAttack(
   if (assignments.length === 0) return state;
 
   // ── 值守场馆限制检查 ────────────────────────────────────────────────────────
-  // 若对方有 isGuard=true 的场馆，只能攻击这些场馆，不能攻击玩家或非守卫场馆
   const oppSide: PlayerSide = side === 0 ? 1 : 0;
   const oppPlayer = state.players[oppSide];
   const guardVenues = oppPlayer.venues.filter((v) => v.isGuard);
 
   if (guardVenues.length > 0) {
     for (const assign of assignments) {
-      if (assign.targetSide !== oppSide) continue; // 不检查攻击己方（理论上不应出现）
+      if (assign.targetSide !== oppSide) continue;
       if (assign.target === "player") {
         throw new Error("对方有值守场馆，必须先摧毁值守场馆才能攻击玩家");
       }
@@ -280,7 +329,6 @@ function handleAssignAttack(
     }
   }
 
-  // ── 逐条结算 ────────────────────────────────────────────────────────────────
   let s = state;
   for (const assignment of assignments) {
     s = processAssignment(s, side, assignment);
@@ -304,7 +352,6 @@ function processAssignment(
   }
 
   if (assignment.target === "player") {
-    // ── 攻击玩家：先扣 block 再扣 hp ─────────────────────────────────────────
     const targetSide = assignment.targetSide;
     const target = state.players[targetSide];
 
@@ -327,7 +374,6 @@ function processAssignment(
 
     let s: InternalMatchState = { ...state, players };
 
-    // hp <= 0 → 对局结束
     if (updatedTarget.hp <= 0) {
       s = { ...s, ended: true, winner: side };
     }
@@ -335,7 +381,6 @@ function processAssignment(
   }
 
   if (assignment.target === "venue") {
-    // ── 攻击场馆 ─────────────────────────────────────────────────────────────
     const targetSide = assignment.targetSide;
     const target = state.players[targetSide];
 
@@ -355,7 +400,6 @@ function processAssignment(
 
     let updatedTarget: InternalPlayerState;
     if (newDurability <= 0) {
-      // 摧毁场馆：从场馆区移至弃牌堆
       const destroyedCard: CardInstance = {
         instanceId: venue.instanceId,
         cardId: venue.cardId,
@@ -366,7 +410,6 @@ function processAssignment(
         discard: [...target.discard, destroyedCard],
       };
     } else {
-      // 减少耐久（本回合内暂留，beginTurn 时重置，若未摧毁则伤害不保留）
       const updatedVenues = target.venues.map((v, i) =>
         i === venueIdx ? { ...v, durability: newDurability } : v
       );
@@ -385,7 +428,6 @@ function processAssignment(
     return { ...state, players };
   }
 
-  // 未知 target 类型 — 防御性处理
   return state;
 }
 
@@ -397,7 +439,6 @@ function handleReady(
   ruleset: RulesetConfig,
   random: () => number
 ): InternalMatchState {
-  // 幂等：重复 READY 不改变状态
   if (state.readyPlayers[side]) {
     return state;
   }
@@ -407,7 +448,6 @@ function handleReady(
 
   const nextState: InternalMatchState = { ...state, readyPlayers: newReady };
 
-  // 双方均 READY → 开局
   if (newReady[0] && newReady[1]) {
     return startMatch(nextState, ruleset, random);
   }
@@ -441,6 +481,40 @@ function startMatch(
     turnNumber: 1,
     activePlayer: 0,
   };
+}
+
+// ── nextBoughtCardToDeckTop 标志处理 ─────────────────────────────────────────
+
+/**
+ * applyBuyFlag — 若玩家设有 nextBoughtCardToDeckTop 标志，
+ * 将刚买入弃牌堆顶的牌移至牌堆顶，并清除标志。
+ */
+function applyBuyFlag(
+  state: InternalMatchState,
+  side: PlayerSide
+): InternalMatchState {
+  const player = state.players[side];
+  if (!player.activeFlags.includes("nextBoughtCardToDeckTop")) {
+    return state;
+  }
+  if (player.discard.length === 0) return state;
+
+  // 弃牌堆最后一张就是刚买的牌
+  const newDiscard = player.discard.slice(0, -1);
+  const boughtCard = player.discard[player.discard.length - 1];
+  const newDeck = [boughtCard, ...player.deck];
+  const newFlags = player.activeFlags.filter((f) => f !== "nextBoughtCardToDeckTop");
+
+  const updatedPlayer: InternalPlayerState = {
+    ...player,
+    discard: newDiscard,
+    deck: newDeck,
+    activeFlags: newFlags,
+  };
+
+  const players = clonePlayers(state);
+  players[side] = updatedPlayer;
+  return { ...state, players };
 }
 
 // ── 内部辅助 ──────────────────────────────────────────────────────────────────

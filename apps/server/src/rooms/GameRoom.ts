@@ -31,12 +31,15 @@ interface RawCardJson {
   isGuard?: boolean;
   durability?: number;
   activationsPerTurn?: number;
+  isPressure?: boolean;
+  tags?: string[];
   abilities: CardDef["abilities"];
 }
 
 const starterCards: RawCardJson[] = loadJson("cards/starter.json");
 const supplyCards: RawCardJson[] = loadJson("cards/fixed-supplies.json");
 const marketCards: RawCardJson[] = loadJson("cards/market-core.json");
+const statusCards: RawCardJson[] = loadJson("cards/status.json");
 const ruleset: RulesetConfig = loadJson("rulesets/core-v1.json");
 
 // cardId → cost 查找表
@@ -44,7 +47,7 @@ const costMap = new Map<string, number>();
 // cardId → CardDef 查找表
 const cardDefMap = new Map<string, CardDef>();
 
-for (const c of [...starterCards, ...supplyCards, ...marketCards]) {
+for (const c of [...starterCards, ...supplyCards, ...marketCards, ...statusCards]) {
   costMap.set(c.id, c.cost);
   cardDefMap.set(c.id, {
     id: c.id,
@@ -53,6 +56,8 @@ for (const c of [...starterCards, ...supplyCards, ...marketCards]) {
     isGuard: c.isGuard,
     durability: c.durability,
     activationsPerTurn: c.activationsPerTurn,
+    // isPressure：优先 JSON 字段，否则检查 tags 数组是否含 "pressure"
+    isPressure: c.isPressure ?? c.tags?.includes("pressure"),
   });
 }
 

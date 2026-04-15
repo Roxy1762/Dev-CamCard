@@ -132,5 +132,8 @@ function makePlayer(
     venues: [],
     scheduleSlots: Array<CardInstance | null>(ruleset.scheduleSlots).fill(null),
     reservedCard: null,
+    reservedCardTurn: null,
+    hasReservedThisTurn: false,
+    activeFlags: [],
   };
 }

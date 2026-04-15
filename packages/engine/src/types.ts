@@ -54,6 +54,12 @@ export interface InternalPlayerState {
   scheduleSlots: (CardInstance | null)[];
   /** 预约位（最多 1） */
   reservedCard: CardInstance | null;
+  /** 记录预约发生时的回合数（用于阻止同回合购买） */
+  reservedCardTurn: number | null;
+  /** 本回合是否已执行过预约（每回合只能预约 1 次） */
+  hasReservedThisTurn: boolean;
+  /** 活动标志位（用于 setFlag 效果，如 nextBoughtCardToDeckTop） */
+  activeFlags: string[];
 }
 
 /**

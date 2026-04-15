@@ -26,6 +26,9 @@ function makePlayer(overrides: Partial<InternalPlayerState> = {}): InternalPlaye
     venues: [],
     scheduleSlots: [null, null],
     reservedCard: null,
+    reservedCardTurn: null,
+    hasReservedThisTurn: false,
+    activeFlags: [],
     ...overrides,
   };
 }
