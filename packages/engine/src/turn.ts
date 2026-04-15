@@ -1,20 +1,22 @@
 import type { PlayerSide } from "@dev-camcard/protocol";
 import type { InternalMatchState, InternalPlayerState, VenueState } from "./types";
 import type { CardDef } from "./effects";
-import { applyEffects } from "./effects";
+import { applyStateEffects, checkCondition } from "./effects";
 import { draw } from "./deck";
 
 /** 最小配置接口，供 beginTurn 做日程结算与场馆重置 */
 export interface TurnConfig {
   hp: number;
   getCardDef: (id: string) => CardDef | undefined;
+  /** UUID 生成函数，用于压力牌等需要创建实例的效果 */
+  genId?: () => string;
 }
 
 /**
  * beginTurn — 新回合开始时的清理操作（纯函数）。
  *
  * 按 game-rules.md "回合开始" 顺序：
- *  1. 清空当前玩家残留防备，重置资源/攻击池
+ *  1. 清空当前玩家残留防备，重置资源/攻击池，重置 hasReservedThisTurn
  *  2. 重置场馆启动次数 + 恢复场馆耐久（耐久伤害不保留）
  *  3. 结算日程槽安排牌（若提供 config）
  *
@@ -30,12 +32,13 @@ export function beginTurn(
   const idx = state.activePlayer;
   const player = state.players[idx];
 
-  // ── 1. 清空防备、重置资源/攻击 ───────────────────────────────────────────────
+  // ── 1. 清空防备、重置资源/攻击/预约标志 ───────────────────────────────────────
   let updated: InternalPlayerState = {
     ...player,
     block: 0,
     resourcePool: 0,
     attackPool: 0,
+    hasReservedThisTurn: false,  // 新回合重置预约标志
   };
 
   // ── 2. 重置场馆启动次数 + 恢复耐久 ──────────────────────────────────────────
@@ -48,26 +51,44 @@ export function beginTurn(
 
   // ── 3. 结算日程槽 ────────────────────────────────────────────────────────────
   if (config) {
-    const newSlots = [...updated.scheduleSlots] as (typeof updated.scheduleSlots);
-    for (let i = 0; i < newSlots.length; i++) {
-      const slot = newSlots[i];
+    const genId = config.genId ?? (() => crypto.randomUUID());
+    const activePlayer = idx as PlayerSide;
+
+    // 把当前 updated 写入临时 state，以便 applyStateEffects 访问双方状态
+    let s = mergePlayer(state, idx, updated);
+
+    for (let i = 0; i < updated.scheduleSlots.length; i++) {
+      const slot = s.players[idx].scheduleSlots[i];
       if (!slot) continue;
 
       const cardDef = config.getCardDef(slot.cardId);
       if (cardDef) {
         for (const ability of cardDef.abilities) {
-          if (ability.trigger === "onScheduleResolve") {
-            updated = applyEffects(updated, ability.effects, random, config.hp);
+          if (ability.trigger !== "onScheduleResolve") continue;
+
+          const currentPlayer = s.players[idx];
+          if (ability.condition && !checkCondition(currentPlayer, ability.condition)) {
+            continue;
           }
+
+          s = applyStateEffects(s, activePlayer, ability.effects, random, config.hp, genId);
         }
       }
+
       // 结算后移入弃牌堆，腾出槽位
-      updated = {
-        ...updated,
-        discard: [...updated.discard, slot],
-        scheduleSlots: updated.scheduleSlots.map((s, si) => (si === i ? null : s)) as typeof newSlots,
+      const currentPlayer = s.players[idx];
+      const newScheduleSlots = currentPlayer.scheduleSlots.map((sl, si) =>
+        si === i ? null : sl
+      ) as (typeof currentPlayer.scheduleSlots);
+      const updatedSlotPlayer: InternalPlayerState = {
+        ...currentPlayer,
+        discard: [...currentPlayer.discard, slot],
+        scheduleSlots: newScheduleSlots,
       };
+      s = mergePlayer(s, idx, updatedSlotPlayer);
     }
+
+    updated = s.players[idx];
   }
 
   const players = [
@@ -84,10 +105,9 @@ export function beginTurn(
  *
  * 按 game-rules.md "回合结束" 顺序：
  *  1. 弃本回合打出的行动牌（played → discard）
- *  2. 弃手牌（hand → discard）
- *  3. 弃压力（压力牌已在手牌中，随手牌一起弃置）
- *  4. 场馆留场（无操作）
- *  5. 抽到 handSize 张
+ *  2. 弃手牌（含压力牌，hand → discard）
+ *  3. 场馆留场（无操作）
+ *  4. 抽到 handSize 张
  *
  * 然后切换行动方，调用 beginTurn。
  *
@@ -105,7 +125,7 @@ export function endTurn(
   const idx = state.activePlayer;
   const player = state.players[idx];
 
-  // 步骤 1-3：弃出牌 + 手牌（含压力）
+  // 步骤 1-2：弃出牌 + 手牌（含压力）
   const toDiscard = [...player.played, ...player.hand];
 
   let updated: InternalPlayerState = {
@@ -115,7 +135,7 @@ export function endTurn(
     discard: [...player.discard, ...toDiscard],
   };
 
-  // 步骤 5：抽到 handSize 张
+  // 步骤 4：抽到 handSize 张
   updated = draw(updated, handSize, random);
 
   const players = [
@@ -140,4 +160,17 @@ export function endTurn(
 
   // 开始下一玩家的回合（含日程结算 + 场馆重置）
   return beginTurn(afterSwitch, config, random);
+}
+
+// ── 内部辅助 ──────────────────────────────────────────────────────────────────
+
+/** 将一个玩家状态合并进 state，返回新 state */
+function mergePlayer(
+  state: InternalMatchState,
+  idx: number,
+  updatedPlayer: InternalPlayerState
+): InternalMatchState {
+  const players = [state.players[0], state.players[1]] as [InternalPlayerState, InternalPlayerState];
+  players[idx] = updatedPlayer;
+  return { ...state, players };
 }

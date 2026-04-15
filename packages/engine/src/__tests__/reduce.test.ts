@@ -130,6 +130,9 @@ function makePlayer(side: 0 | 1, overrides: Partial<InternalPlayerState> = {}): 
     venues: [],
     scheduleSlots: [null, null],
     reservedCard: null,
+    reservedCardTurn: null,
+    hasReservedThisTurn: false,
+    activeFlags: [],
     ...overrides,
   };
 }

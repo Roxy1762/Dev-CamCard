@@ -82,5 +82,6 @@ function toPublicPlayerSummary(player: InternalPlayerState): PublicPlayerSummary
     venues,
     scheduleSlots: player.scheduleSlots.map((s) => (s ? toRef(s) : null)),
     reservedCard: player.reservedCard ? toRef(player.reservedCard) : null,
+    hasReservedThisTurn: player.hasReservedThisTurn,
   };
 }

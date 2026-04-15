@@ -21,6 +21,8 @@ const C_BTN_DNG = "#440000";   // 危险类按钮（CONCEDE）
 const C_BTN_SCH = "#223300";   // 日程类按钮
 const C_VENUE   = "#553388";   // 场馆底色
 const C_GUARD   = "#880022";   // 值守场馆底色
+const C_RESERVE = "#334422";   // 预约位底色
+const C_BTN_RSV = "#224433";   // 预约按钮底色（绿偏暗）
 
 /**
  * RoomScene — 最小可玩的 Phaser 联机牌桌。
@@ -142,6 +144,14 @@ export class RoomScene extends Phaser.Scene {
     const schedParts = opp.scheduleSlots.map((s, i) => `[${i + 1}: ${s ? s.id : "空"}]`).join(" ");
     this.txt(10, y, `日程: ${schedParts}`, 11, C_LABEL);
     y += 14;
+
+    // 对方预约位（只显示占位状态，不显示牌面）
+    const oppReserveLabel = opp.reservedCard
+      ? `预约位: [已预约: ${opp.reservedCard.id}]`
+      : "预约位: [空]";
+    this.txt(10, y, oppReserveLabel, 11, opp.reservedCard ? "#aaffaa" : "#555555");
+    y += 14;
+
     this.hr(0, y, this.cameras.main.width / 2);
   }
 
@@ -158,6 +168,8 @@ export class RoomScene extends Phaser.Scene {
     y += 18;
 
     // 三栏商店
+    const me = this.view.players[mySide];
+    const canReserve = isMyTurn && !me.hasReservedThisTurn && me.reservedCard === null;
     const laneW = Math.floor((W - shopX - 8) / 3);
     for (let i = 0; i < this.view.market.length; i++) {
       const lane = this.view.market[i];
@@ -165,21 +177,29 @@ export class RoomScene extends Phaser.Scene {
       this.txt(lx, y, lane.lane.toUpperCase(), 11, C_LANE);
       for (let si = 0; si < lane.slots.length; si++) {
         const card = lane.slots[si];
-        const by = y + 14 + si * 34;
+        const by = y + 14 + si * 46;
         if (card) {
-          const bg = isMyTurn
-            ? this.btn(lx, by, laneW - 4, 30, `${card.id}\n(点击买)`, 10, C_BTN_MY, C_BTN_TXT, () => {
-                this.roomClient.send({ type: CMD.BUY_MARKET_CARD, instanceId: card.instanceId });
-              })
-            : this.txtBox(lx, by, laneW - 4, 30, card.id, 10, C_BTN, C_LABEL);
-          void bg;
+          if (isMyTurn) {
+            // 买按钮
+            this.btn(lx, by, laneW - 4, 22, `${card.id}(买)`, 9, C_BTN_MY, C_BTN_TXT, () => {
+              this.roomClient.send({ type: CMD.BUY_MARKET_CARD, instanceId: card.instanceId });
+            });
+            // 预约按钮（资源 ≥1 且未预约过且预约位空）
+            if (canReserve) {
+              this.btn(lx, by + 24, laneW - 4, 18, `预约(1资源)`, 9, C_BTN_RSV, "#aaffcc", () => {
+                this.roomClient.send({ type: CMD.RESERVE_MARKET_CARD, instanceId: card.instanceId });
+              });
+            }
+          } else {
+            this.txtBox(lx, by, laneW - 4, 42, card.id, 9, C_BTN, C_LABEL);
+          }
         } else {
-          this.txtBox(lx, by, laneW - 4, 30, "（空）", 10, C_BTN, "#555555");
+          this.txtBox(lx, by, laneW - 4, 42, "（空）", 9, C_BTN, "#555555");
         }
       }
     }
 
-    y += 14 + 2 * 34 + 4;
+    y += 14 + 2 * 46 + 4;
 
     // 固定补给
     this.txt(shopX + 4, y, "固定补给:", 11, C_LABEL);
@@ -233,6 +253,20 @@ export class RoomScene extends Phaser.Scene {
     // 日程槽
     const schedParts = me.scheduleSlots.map((s, i) => `[${i + 1}: ${s ? s.id : "空"}]`).join("  ");
     this.txt(10, y, `日程: ${schedParts}`, 11, C_LABEL);
+    y += 18;
+
+    // 己方预约位
+    if (me.reservedCard) {
+      this.txt(10, y, `预约位: [${me.reservedCard.id}]`, 11, "#aaffaa");
+      // 显示购买预约牌按钮（仅未来回合可用）
+      if (isMyTurn) {
+        this.btn(130, y, 160, 18, `购买预约牌（折扣1）`, 10, C_BTN_RSV, "#aaffcc", () => {
+          this.roomClient.send({ type: CMD.BUY_RESERVED_CARD });
+        });
+      }
+    } else {
+      this.txt(10, y, "预约位: [空]", 11, "#555555");
+    }
   }
 
   // ── 手牌区 ────────────────────────────────────────────────────────────────────
