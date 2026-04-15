@@ -60,21 +60,25 @@ describe("CardDef 校验", () => {
     expect(result.valid).toBe(true);
   });
 
-  it("type=venue 但缺少 venueKind 时失败", () => {
+  it("type=venue 不含 venueKind 时通过校验（v1 兼容：可改用 isGuard 字段）", () => {
+    // v1 schema 已放宽约束：venue 可以用 isGuard（旧格式）或 venueKind（新格式），两者均接受。
+    // 原因：实际数据（market-core.json）使用 isGuard，而非 venueKind。
+    // v2 新增卡请使用 card-rule.schema.json，与 v1 无此字段争议。
     const card = {
       id: "test_venue_no_kind",
       version: 1,
-      name: "场馆缺字段",
+      name: "场馆兼容格式",
       cost: 3,
       rarity: "common",
       lane: "activity",
       type: "venue",
-      // 故意缺少 venueKind
+      isGuard: false,
+      durability: 3,
       text: { body: "测试。" },
       abilities: [],
     };
     const result = checkCardDef(card);
-    expect(result.valid).toBe(false);
+    expect(result.valid).toBe(true);
   });
 
   it("非白名单 effect opcode 被拒绝", () => {

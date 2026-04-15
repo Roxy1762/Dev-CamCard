@@ -1,10 +1,10 @@
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "$id": "card",
-  "title": "CardDef",
-  "description": "卡牌定义 — 所有卡牌数据必须通过此 schema 校验（non-negotiables.md）",
+  "$id": "card-rule",
+  "title": "CardRule",
+  "description": "卡牌规则数据（v2 分层格式）— 不含本地化文案，仅包含规则与元数据字段。\n规则与文案分层的原因：规则数据是引擎的真源，文案随 locale 变化；两者分离后可独立版本化、多语言扩展、mod 覆盖。",
   "type": "object",
-  "required": ["id", "version", "name", "cost", "rarity", "lane", "type", "text"],
+  "required": ["id", "schemaVersion", "contentVersion", "cost", "rarity", "lane", "type", "tags", "abilities"],
   "additionalProperties": false,
   "properties": {
     "id": {
@@ -12,14 +12,15 @@
       "pattern": "^[a-z][a-z0-9_]*$",
       "description": "卡牌唯一 ID，以 card-catalog.md 为准，不得擅自修改"
     },
-    "version": {
+    "schemaVersion": {
+      "type": "integer",
+      "minimum": 2,
+      "description": "schema 版本；v2 分层格式起始值为 2"
+    },
+    "contentVersion": {
       "type": "integer",
       "minimum": 1,
-      "description": "卡牌版本号，每次改动递增"
-    },
-    "name": {
-      "type": "string",
-      "minLength": 1
+      "description": "内容版本，每次改动数值字段或效果时递增"
     },
     "cost": {
       "type": "integer",
@@ -28,8 +29,8 @@
     },
     "rarity": {
       "type": "string",
-      "enum": ["common", "uncommon", "rare", "advanced", "signature"],
-      "description": "稀有度（common/uncommon/rare 为现行数据值；advanced/signature 为扩展保留）"
+      "enum": ["common", "uncommon", "rare", "signature"],
+      "description": "稀有度"
     },
     "lane": {
       "type": "string",
@@ -40,28 +41,19 @@
       "type": "string",
       "enum": ["action", "venue"]
     },
-    "venueKind": {
-      "type": "string",
-      "enum": ["normal", "guard"],
-      "description": "场馆子类型（v2 字段，与 isGuard 二选一）"
-    },
     "isGuard": {
       "type": "boolean",
-      "description": "是否为值守场馆（v1 字段，v2 改用 venueKind）"
+      "description": "是否为值守场馆（type=venue 时生效）"
     },
     "durability": {
       "type": "integer",
       "minimum": 1,
-      "description": "场馆耐久度，type=venue 时有效"
+      "description": "场馆耐久度（type=venue 时有效）"
     },
     "activationsPerTurn": {
       "type": "integer",
       "minimum": 0,
-      "description": "场馆每回合最多启动次数"
-    },
-    "isPressure": {
-      "type": "boolean",
-      "description": "是否为压力状态牌（不可打出，回合结束弃置）"
+      "description": "场馆每回合最多启动次数（type=venue 时有效）"
     },
     "starter": {
       "type": "boolean",
@@ -71,19 +63,18 @@
       "type": "boolean",
       "description": "是否属于固定补给牌堆（无限）"
     },
+    "isPressure": {
+      "type": "boolean",
+      "description": "是否为压力状态牌（不可打出，回合结束弃置）"
+    },
     "tags": {
       "type": "array",
       "items": { "type": "string" },
       "description": "题材标签，仅作分类，不作为规则类型"
     },
-    "text": {
-      "type": "object",
-      "required": ["body"],
-      "additionalProperties": false,
-      "properties": {
-        "body": { "type": "string", "description": "卡面正文" },
-        "reminder": { "type": "string", "description": "括号提示文字" }
-      }
+    "artKey": {
+      "type": "string",
+      "description": "美术资源键名（默认等于 id）；供客户端加载贴图时使用"
     },
     "abilities": {
       "type": "array",
@@ -97,13 +88,6 @@
         "notes": { "type": "string", "description": "平衡性备注" }
       }
     }
-  },
-  "if": {
-    "properties": { "type": { "const": "venue" } },
-    "required": ["type"]
-  },
-  "then": {
-    "description": "type=venue 时应提供 venueKind（v2）或 isGuard（v1）；两者均为可选以保持兼容"
   },
   "$defs": {
     "Ability": {

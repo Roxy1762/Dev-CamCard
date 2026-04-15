@@ -1,0 +1,12 @@
+{
+  "schemaVersion": 1,
+  "id": "base",
+  "contentVersion": 1,
+  "name": "基础包",
+  "description": "游戏本体基础内容包，包含核心牌组和核心规则集。",
+  "author": "Dev-CamCard Team",
+  "includes": {
+    "sets": ["core-v1"],
+    "rulesets": ["core-v1"]
+  }
+}

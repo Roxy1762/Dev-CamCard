@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "locale": "zh-CN",
+  "cards": {
+    "supply_errand_runner": {
+      "name": "跑腿侠",
+      "body": "获得 1 资源，摸 1 张牌。"
+    },
+    "supply_milk_bread": {
+      "name": "牛奶面包",
+      "body": "获得 2 资源，回复 1 生命。"
+    },
+    "supply_print_materials": {
+      "name": "打印材料",
+      "body": "获得 3 资源。"
+    }
+  }
+}

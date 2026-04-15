@@ -1,0 +1,11 @@
+{
+  "schemaVersion": 1,
+  "locale": "en-US",
+  "cards": {
+    "status_pressure": {
+      "name": "Pressure",
+      "body": "Cannot be played. Discarded at end of turn.",
+      "reminder": "(Pressure cards cannot be played and are automatically discarded at end of turn.)"
+    }
+  }
+}

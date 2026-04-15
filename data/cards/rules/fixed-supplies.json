@@ -1,0 +1,59 @@
+[
+  {
+    "id": "supply_errand_runner",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "fixedSupply": true,
+    "tags": [],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "gainResource", "amount": 1 },
+          { "op": "draw", "count": 1 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "supply_milk_bread",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "fixedSupply": true,
+    "tags": [],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "gainResource", "amount": 2 },
+          { "op": "heal", "amount": 1 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "supply_print_materials",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "fixedSupply": true,
+    "tags": [],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [{ "op": "gainResource", "amount": 3 }]
+      }
+    ]
+  }
+]
