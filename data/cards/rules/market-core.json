@@ -7,17 +7,31 @@
     "rarity": "common",
     "lane": "activity",
     "type": "action",
-    "tags": ["red", "sport"],
+    "tags": [
+      "red",
+      "sport"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
-        "effects": [{ "op": "gainAttack", "amount": 1 }]
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 1
+          }
+        ]
       },
       {
         "trigger": "onScheduleResolve",
-        "effects": [{ "op": "gainAttack", "amount": 2 }]
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 2
+          }
+        ]
       }
-    ]
+    ],
+    "artKey": "red_pre_match_warmup"
   },
   {
     "id": "red_extra_training_plan",
@@ -27,17 +41,31 @@
     "rarity": "uncommon",
     "lane": "activity",
     "type": "action",
-    "tags": ["red", "sport"],
+    "tags": [
+      "red",
+      "sport"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
-        "effects": [{ "op": "draw", "count": 1 }]
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
       },
       {
         "trigger": "onScheduleResolve",
-        "effects": [{ "op": "gainAttack", "amount": 2 }]
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 2
+          }
+        ]
       }
-    ]
+    ],
+    "artKey": "red_extra_training_plan"
   },
   {
     "id": "blue_all_night_study",
@@ -47,17 +75,31 @@
     "rarity": "uncommon",
     "lane": "course",
     "type": "action",
-    "tags": ["blue", "study"],
+    "tags": [
+      "blue",
+      "study"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
-        "effects": [{ "op": "gainResource", "amount": 2 }]
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 2
+          }
+        ]
       },
       {
         "trigger": "onScheduleResolve",
-        "effects": [{ "op": "draw", "count": 2 }]
+        "effects": [
+          {
+            "op": "draw",
+            "count": 2
+          }
+        ]
       }
-    ]
+    ],
+    "artKey": "blue_all_night_study"
   },
   {
     "id": "white_duty_student",
@@ -70,13 +112,22 @@
     "isGuard": true,
     "durability": 4,
     "activationsPerTurn": 1,
-    "tags": ["white", "discipline"],
+    "tags": [
+      "white",
+      "discipline"
+    ],
     "abilities": [
       {
         "trigger": "onActivate",
-        "effects": [{ "op": "gainBlock", "amount": 1 }]
+        "effects": [
+          {
+            "op": "gainBlock",
+            "amount": 1
+          }
+        ]
       }
-    ]
+    ],
+    "artKey": "white_duty_student"
   },
   {
     "id": "white_discipline_week",
@@ -86,13 +137,22 @@
     "rarity": "uncommon",
     "lane": "daily",
     "type": "action",
-    "tags": ["white", "discipline"],
+    "tags": [
+      "white",
+      "discipline"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
-        "effects": [{ "op": "gainBlock", "amount": 3 }]
+        "effects": [
+          {
+            "op": "gainBlock",
+            "amount": 3
+          }
+        ]
       }
-    ]
+    ],
+    "artKey": "white_discipline_week"
   },
   {
     "id": "green_makerspace",
@@ -105,13 +165,22 @@
     "isGuard": false,
     "durability": 5,
     "activationsPerTurn": 1,
-    "tags": ["green", "club"],
+    "tags": [
+      "green",
+      "club"
+    ],
     "abilities": [
       {
         "trigger": "onActivate",
-        "effects": [{ "op": "gainResource", "amount": 2 }]
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 2
+          }
+        ]
       }
-    ]
+    ],
+    "artKey": "green_makerspace"
   },
   {
     "id": "neutral_class_representative_notice",
@@ -121,16 +190,25 @@
     "rarity": "common",
     "lane": "daily",
     "type": "action",
-    "tags": ["neutral"],
+    "tags": [
+      "neutral"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "draw", "count": 1 },
-          { "op": "gainResource", "amount": 1 }
+          {
+            "op": "draw",
+            "count": 1
+          },
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
         ]
       }
-    ]
+    ],
+    "artKey": "neutral_class_representative_notice"
   },
   {
     "id": "white_discipline_warning",
@@ -140,16 +218,27 @@
     "rarity": "common",
     "lane": "daily",
     "type": "action",
-    "tags": ["white", "discipline"],
+    "tags": [
+      "white",
+      "discipline"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "queueDelayedDiscard", "count": 1, "target": "opponent" },
-          { "op": "gainBlock", "amount": 2 }
+          {
+            "op": "queueDelayedDiscard",
+            "count": 1,
+            "target": "opponent"
+          },
+          {
+            "op": "gainBlock",
+            "amount": 2
+          }
         ]
       }
-    ]
+    ],
+    "artKey": "white_discipline_warning"
   },
   {
     "id": "white_dorm_inspection",
@@ -159,16 +248,27 @@
     "rarity": "uncommon",
     "lane": "daily",
     "type": "action",
-    "tags": ["white", "discipline"],
+    "tags": [
+      "white",
+      "discipline"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "queueDelayedDiscard", "count": 2, "target": "opponent" },
-          { "op": "gainBlock", "amount": 1 }
+          {
+            "op": "queueDelayedDiscard",
+            "count": 2,
+            "target": "opponent"
+          },
+          {
+            "op": "gainBlock",
+            "amount": 1
+          }
         ]
       }
-    ]
+    ],
+    "artKey": "white_dorm_inspection"
   },
   {
     "id": "white_student_affairs_talk",
@@ -178,16 +278,27 @@
     "rarity": "rare",
     "lane": "daily",
     "type": "action",
-    "tags": ["white", "discipline"],
+    "tags": [
+      "white",
+      "discipline"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "queueDelayedDiscard", "count": 3, "target": "opponent" },
-          { "op": "gainBlock", "amount": 3 }
+          {
+            "op": "queueDelayedDiscard",
+            "count": 3,
+            "target": "opponent"
+          },
+          {
+            "op": "gainBlock",
+            "amount": 3
+          }
         ]
       }
-    ]
+    ],
+    "artKey": "white_student_affairs_talk"
   },
   {
     "id": "neutral_finals_week",
@@ -197,15 +308,26 @@
     "rarity": "common",
     "lane": "course",
     "type": "action",
-    "tags": ["neutral"],
+    "tags": [
+      "neutral"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "createPressure", "count": 2, "target": "opponent" },
-          { "op": "createPressure", "count": 1, "target": "self" }
+          {
+            "op": "createPressure",
+            "count": 2,
+            "target": "opponent"
+          },
+          {
+            "op": "createPressure",
+            "count": 1,
+            "target": "self"
+          }
         ]
       }
-    ]
+    ],
+    "artKey": "neutral_finals_week"
   }
 ]

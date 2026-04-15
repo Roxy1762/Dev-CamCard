@@ -77,6 +77,7 @@ data/
 |------|------|------|
 | `schemaVersion` | integer ≥ 2 | schema 格式版本，v2 分层格式固定为 2 |
 | `contentVersion` | integer ≥ 1 | 内容版本，每次改动 cost/abilities 等规则字段时递增 |
+| `artKey` | string | 美术资源键名；当前约定所有卡牌显式填写，默认与 `id` 一致（如有独立美术映射再单独改值） |
 
 ### CardTextFile（本地化文案）
 

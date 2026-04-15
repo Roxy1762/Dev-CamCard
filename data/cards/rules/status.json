@@ -8,7 +8,11 @@
     "lane": "daily",
     "type": "action",
     "isPressure": true,
-    "tags": ["status", "pressure"],
-    "abilities": []
+    "tags": [
+      "status",
+      "pressure"
+    ],
+    "abilities": [],
+    "artKey": "status_pressure"
   }
 ]

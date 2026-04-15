@@ -97,9 +97,10 @@
 - [x] **v2 内容系统**（新分层结构，详见 docs/content-architecture.md）：
   - data/cards/rules/（4 文件，规则真源，无 name/text）
   - data/cards/text/zh-CN/（4 文件，中文文案）
-  - data/cards/text/en-US/（4 文件，英文占位文案）
+  - data/cards/text/en-US/（4 文件，最小英文占位文案）
   - data/sets/core-v1.json（核心集清单，19 张卡 ID）
   - data/content-packs/base.json（基础包清单）
+  - rules 卡牌 `artKey` 已在现有 19 张卡上补齐并统一（当前与 `id` 对齐）
 - [x] **JSON Schema 体系**：
   - card.schema.json（v1，已补全 isPressure/isGuard，修正 rarity 枚举）
   - card-rule.schema.json（v2 规则真源 schema，新增）
@@ -135,7 +136,7 @@
 - [ ] 数据库（PostgreSQL + Prisma 未初始化）
 - [x] AJV 校验：schemas 包已有 v1/v2 全套校验器，但 server 加载时**未接入运行时校验**（只有测试时校验）
 - [ ] server 迁移至 v2 加载路径（当前仍读取旧 flat JSON）
-- [ ] 完整 en-US 翻译（当前为机器翻译占位）
+- [ ] 完整 en-US 翻译（当前仅提供最小英文占位文案，保证 locale 不缺文件）
 
 ### 客户端体验
 
@@ -169,7 +170,7 @@
 | 文件 | 测试数 | 说明 |
 |------|--------|------|
 | validate.test.ts | 16 | v1 schema 校验 |
-| **content-system.test.ts** | **44** | **v2 内容系统（本轮新增）** |
-| **小计** | **60** | |
+| **content-system.test.ts** | **46** | **v2 内容系统（含 locale fallback 与 artKey 完整性）** |
+| **小计** | **62** | |
 
-**总计：250 个测试，全部通过**
+**总计：252 个测试（engine 190 + schemas 62）**

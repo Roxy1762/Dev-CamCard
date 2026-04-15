@@ -316,6 +316,15 @@ describe("content-loader", () => {
     expect(merged.every((m) => typeof m.name === "string" && m.name.length > 0)).toBe(true);
   });
 
+  it("loadMergedBatch 在 locale 文件缺失时使用降级文案", () => {
+    const merged = loadMergedBatch(DATA_ROOT, [
+      { rules: "data/cards/rules/starter.json", text: "data/cards/text/fr-FR/starter.json" },
+    ]);
+    expect(merged.length).toBe(4);
+    expect(merged[0].name).toBe(merged[0].id);
+    expect(merged[0].text.body).toBe("");
+  });
+
   it("loadSetManifest 正确加载", () => {
     const s = loadSetManifest(DATA_ROOT, "data/sets/core-v1.json");
     expect(s.id).toBe("core-v1");
@@ -393,6 +402,19 @@ describe("card id 稳定性（card-catalog.md）", () => {
     };
     for (const rule of allRules) {
       expect(allText[rule.id], `规则 id "${rule.id}" 缺少 zh-CN 文案`).toBeDefined();
+    }
+  });
+
+  it("rules 目录所有卡牌均显式声明 artKey", () => {
+    const allRules = loadRuleBatch(DATA_ROOT, [
+      "data/cards/rules/starter.json",
+      "data/cards/rules/fixed-supplies.json",
+      "data/cards/rules/status.json",
+      "data/cards/rules/market-core.json",
+    ]);
+    for (const rule of allRules) {
+      expect(typeof rule.artKey).toBe("string");
+      expect(rule.artKey!.length).toBeGreaterThan(0);
     }
   });
 });
