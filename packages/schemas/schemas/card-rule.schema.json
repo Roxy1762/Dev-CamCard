@@ -136,7 +136,8 @@
             "createPressure",
             "setFlag",
             "gainFaceUpCard",
-            "queueDelayedDiscard"
+            "queueDelayedDiscard",
+            "chooseTarget"
           ],
           "description": "效果操作码白名单 — 非白名单 op 将被 AJV 拒绝"
         }

@@ -369,5 +369,49 @@
       }
     ],
     "artKey": "blue_draft_simulation"
+  },
+  {
+    "id": "green_anniversary_sponsor",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 5,
+    "rarity": "rare",
+    "lane": "activity",
+    "type": "action",
+    "tags": ["green", "club"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "gainResource", "amount": 1 },
+          { "op": "gainFaceUpCard", "maxCost": 4, "destination": "discard" }
+        ]
+      }
+    ],
+    "artKey": "green_anniversary_sponsor"
+  },
+  {
+    "id": "red_cheer_combo",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": ["red", "sport"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "gainAttack", "amount": 1 },
+          {
+            "op": "chooseTarget",
+            "targetType": "opponentVenue",
+            "onChosen": [{ "op": "damageVenue", "amount": 2 }]
+          }
+        ]
+      }
+    ],
+    "artKey": "red_cheer_combo"
   }
 ]

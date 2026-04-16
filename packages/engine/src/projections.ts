@@ -6,9 +6,10 @@ import type {
   PublicCardRef,
   MarketLane,
   PublicVenueView,
+  TargetCandidateView,
 } from "@dev-camcard/protocol";
 import type { CardInstance, InternalMatchState, InternalPlayerState } from "./types";
-import type { PendingChoice } from "./effects";
+import type { PendingChoice, TargetCandidate } from "./effects";
 
 /**
  * toPublicMatchView — 将内部状态投影为双方可见的公开视图。
@@ -129,6 +130,26 @@ function toPendingChoiceView(choice: PendingChoice): PendingChoiceView {
           instanceId: c.instanceId,
         })),
         maxDiscard: choice.maxDiscard,
+      };
+
+    case "gainFaceUpCardDecision":
+      return {
+        type: "gainFaceUpCardDecision",
+        candidates: choice.candidates.map((c) => ({
+          id: c.cardId,
+          instanceId: c.instanceId,
+        })),
+        destination: choice.destination,
+      };
+
+    case "chooseTarget":
+      return {
+        type: "chooseTarget",
+        targetType: choice.targetType,
+        candidates: choice.candidates.map((c): TargetCandidateView => {
+          if (c.kind === "player") return { kind: "player", side: c.side };
+          return { kind: "venue", instanceId: c.instanceId, cardId: c.cardId, ownerSide: c.ownerSide };
+        }),
       };
   }
 }

@@ -53,6 +53,14 @@
     "blue_draft_simulation": {
       "name": "Draft Simulation",
       "body": "Scry 3: Look at the top 3 cards of your deck. You may discard 1. Put the rest back in order. Then gain 1 resource."
+    },
+    "green_anniversary_sponsor": {
+      "name": "Anniversary Sponsor",
+      "body": "Gain 1 resource. Then gain a card from the market costing up to 4 for free (put it in your discard)."
+    },
+    "red_cheer_combo": {
+      "name": "Cheer Combo",
+      "body": "Gain 1 attack. Choose an opponent venue and deal 2 durability damage to it."
     }
   }
 }

@@ -1,6 +1,11 @@
 import type { Lane, PlayerSide } from "./enums";
 import type { AttackAssignment } from "./commands";
 
+/** 目标候选的客户端视图（chooseTarget 专用） */
+export type TargetCandidateView =
+  | { kind: "player"; side: PlayerSide }
+  | { kind: "venue"; instanceId: string; cardId: string; ownerSide: PlayerSide };
+
 // Re-export AttackAssignment so consumers only need to import from views
 export type { AttackAssignment };
 
@@ -120,6 +125,19 @@ export type PendingChoiceView =
       revealedCards: PublicCardRef[];
       /** 最多可弃几张（MVP = 1） */
       maxDiscard: number;
+    }
+  | {
+      type: "gainFaceUpCardDecision";
+      /** 可获取的市场牌候选列表（费用已满足） */
+      candidates: PublicCardRef[];
+      /** 获取后牌进入的区域 */
+      destination: "discard" | "deckTop";
+    }
+  | {
+      type: "chooseTarget";
+      targetType: "opponentPlayer" | "opponentVenue" | "selfVenue";
+      /** 可供选择的目标列表 */
+      candidates: TargetCandidateView[];
     };
 
 /**

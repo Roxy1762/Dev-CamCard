@@ -376,11 +376,98 @@ export class RoomScene extends Phaser.Scene {
     this.uiObjects.push(mask);
 
     let y = 50;
-
     const titleText = this.choiceTitleText(choice);
     this.txt(W / 2, y, titleText, 14, "#ffff88", true);
     y += 28;
 
+    // ── chooseTarget：目标选择 UI ───────────────────────────────────────────
+    if (choice.type === "chooseTarget") {
+      const CARD_W = 160;
+      const CARD_H = 60;
+      const startX = Math.max(10, (W - choice.candidates.length * (CARD_W + 8)) / 2);
+
+      for (let i = 0; i < choice.candidates.length; i++) {
+        const cand = choice.candidates[i];
+        const selKey = cand.kind === "player" ? `player:${cand.side}` : cand.instanceId;
+        const isSelected = this.choiceSelected.has(selKey);
+        const label = cand.kind === "player"
+          ? `玩家 (P${cand.side})`
+          : vm.getCardName(cand.cardId);
+        const cx = startX + i * (CARD_W + 8);
+
+        this.btn(cx, y, CARD_W, CARD_H, (isSelected ? "✓ " : "") + label, 9,
+          isSelected ? "#662222" : "#222244", isSelected ? "#ffaaaa" : "#cccccc",
+          () => {
+            // 目标只能选 1 个：清除后选新的
+            this.choiceSelected.clear();
+            this.choiceSelected.add(selKey);
+            this.rebuildUI();
+          });
+      }
+
+      y += CARD_H + 16;
+      const selCount = this.choiceSelected.size;
+      this.txt(W / 2, y, selCount === 0 ? "请选择一个目标" : `已选目标`, 11, "#aaaaaa", true);
+      y += 20;
+
+      if (selCount === 1) {
+        this.btn(W / 2 - 90, y, 180, 36, "确认目标", 12, "#442200", "#ffcc88", () => {
+          this.roomClient.send({
+            type: CMD.SUBMIT_CHOICE,
+            selectedInstanceIds: Array.from(this.choiceSelected),
+          });
+          this.choiceSelected.clear();
+        });
+      }
+      return;
+    }
+
+    // ── gainFaceUpCardDecision：市场牌选择 UI ───────────────────────────────
+    if (choice.type === "gainFaceUpCardDecision") {
+      const CARD_W = 130;
+      const CARD_H = 60;
+      const startX = Math.max(10, (W - choice.candidates.length * (CARD_W + 6)) / 2);
+
+      this.txt(W / 2, y,
+        `目标：${choice.destination === "deckTop" ? "牌堆顶" : "弃牌堆"}`, 11, "#aaaaaa", true);
+      y += 16;
+
+      for (let i = 0; i < choice.candidates.length; i++) {
+        const c = choice.candidates[i];
+        const cx = startX + i * (CARD_W + 6);
+        const isSelected = this.choiceSelected.has(c.instanceId);
+        this.btn(cx, y, CARD_W, CARD_H,
+          (isSelected ? "✓ " : "") + vm.getCardName(c.id), 9,
+          isSelected ? "#226622" : "#222244",
+          isSelected ? "#aaffaa" : "#cccccc",
+          () => {
+            // 只能选 1 张
+            this.choiceSelected.clear();
+            this.choiceSelected.add(c.instanceId);
+            this.rebuildUI();
+          });
+      }
+
+      y += CARD_H + 16;
+      const selCount = this.choiceSelected.size;
+      this.txt(W / 2, y, selCount === 0 ? "请选择一张牌（或跳过）" : `已选 1 张`, 11, "#aaaaaa", true);
+      y += 20;
+
+      this.btn(W / 2 - 180, y, 160, 36,
+        selCount === 0 ? "跳过（不获取）" : "确认获取", 12,
+        selCount === 0 ? "#333333" : "#004422",
+        selCount === 0 ? "#888888" : "#aaffaa",
+        () => {
+          this.roomClient.send({
+            type: CMD.SUBMIT_CHOICE,
+            selectedInstanceIds: Array.from(this.choiceSelected),
+          });
+          this.choiceSelected.clear();
+        });
+      return;
+    }
+
+    // ── 卡牌选择 UI（hand / discard / scry）───────────────────────────────
     let candidates: PublicCardRef[] = [];
     if (choice.type === "chooseCardsFromHand") {
       candidates = vm.hand;
@@ -399,13 +486,12 @@ export class RoomScene extends Phaser.Scene {
     if (choice.type === "chooseCardsFromHandOrDiscard" && vm.hand.length > 0) {
       this.txt(startX, y, "← 手牌", 10, "#aaaaff");
       if (vm.discard.length > 0) {
-        const discardStartX = startX + vm.hand.length * (CARD_W + 6) + 4;
-        this.txt(discardStartX, y, "弃牌堆 →", 10, "#ffaaaa");
+        this.txt(startX + vm.hand.length * (CARD_W + 6) + 4, y, "弃牌堆 →", 10, "#ffaaaa");
       }
       y += 14;
     }
     if (choice.type === "scryDecision") {
-      this.txt(W / 2, y, "（选择要弃掉的牌，最多 " + choice.maxDiscard + " 张；不选则全部放回）", 11, "#aaaaaa", true);
+      this.txt(W / 2, y, `（选择要弃掉的牌，最多 ${choice.maxDiscard} 张；不选则全部放回）`, 11, "#aaaaaa", true);
       y += 16;
     }
 
@@ -413,17 +499,15 @@ export class RoomScene extends Phaser.Scene {
       const c = candidates[i];
       const cx = startX + i * (CARD_W + 6);
       const isSelected = this.choiceSelected.has(c.instanceId);
-      const bgColor = isSelected ? "#226622" : "#222244";
-      const borderLabel = isSelected ? "✓ " : "";
-
-      this.btn(cx, y, CARD_W, CARD_H, `${borderLabel}${vm.getCardName(c.id)}`, 9, bgColor, isSelected ? "#aaffaa" : "#cccccc", () => {
-        if (this.choiceSelected.has(c.instanceId)) {
-          this.choiceSelected.delete(c.instanceId);
-        } else {
-          this.choiceSelected.add(c.instanceId);
-        }
-        this.rebuildUI();
-      });
+      this.btn(cx, y, CARD_W, CARD_H,
+        (isSelected ? "✓ " : "") + vm.getCardName(c.id), 9,
+        isSelected ? "#226622" : "#222244",
+        isSelected ? "#aaffaa" : "#cccccc",
+        () => {
+          if (this.choiceSelected.has(c.instanceId)) this.choiceSelected.delete(c.instanceId);
+          else this.choiceSelected.add(c.instanceId);
+          this.rebuildUI();
+        });
     }
 
     if (candidates.length === 0) {
@@ -433,12 +517,13 @@ export class RoomScene extends Phaser.Scene {
     y += CARD_H + 16;
 
     const selCount = this.choiceSelected.size;
-    const maxCount = choice.type === "scryDecision" ? choice.maxDiscard : (choice as { maxCount: number }).maxCount;
+    const maxCount = choice.type === "scryDecision"
+      ? choice.maxDiscard
+      : (choice as { maxCount: number }).maxCount;
     this.txt(W / 2, y, `已选: ${selCount} / 最多 ${maxCount} 张`, 11, "#aaaaaa", true);
     y += 20;
 
-    const canSubmit = selCount <= maxCount;
-    if (canSubmit) {
+    if (selCount <= maxCount) {
       const btnLabel = selCount === 0 ? "跳过（不选）" : `确认报废 / 弃掉 ${selCount} 张`;
       this.btn(W / 2 - 100, y, 200, 36, btnLabel, 12, "#004422", "#aaffaa", () => {
         this.roomClient.send({
@@ -460,6 +545,12 @@ export class RoomScene extends Phaser.Scene {
         return `请从手牌或弃牌堆中选择最多 ${choice.maxCount} 张牌报废`;
       case "scryDecision":
         return `预习：查看牌堆顶 ${choice.revealedCards.length} 张，可弃掉其中 ${choice.maxDiscard} 张`;
+      case "gainFaceUpCardDecision":
+        return `免费获取一张市场牌（费用已满足）`;
+      case "chooseTarget":
+        return choice.targetType === "opponentPlayer" ? "选择目标：对手玩家"
+          : choice.targetType === "opponentVenue" ? "选择目标：对方场馆"
+          : "选择目标：己方场馆";
     }
   }
 
