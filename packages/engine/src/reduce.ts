@@ -7,6 +7,7 @@ import { applyEffects, applyStateEffects, checkCondition, resolveChoice } from "
 import { draw, shuffle } from "./deck";
 import { endTurn } from "./turn";
 import { buyFromMarket, buyFixedSupply, reserveFromMarket, buyReservedCard } from "./market";
+import { createSeededRng, type SeededRng } from "./rng";
 
 /**
  * EngineConfig — reduce 调用时注入的引擎配置。
@@ -32,8 +33,43 @@ export function reduce(
   side: PlayerSide,
   command: ClientCommand,
   config: EngineConfig,
-  random: () => number = Math.random,
-  genId: () => string = () => crypto.randomUUID()
+  random?: () => number,
+  genId?: () => string
+): InternalMatchState {
+  // 可复现模式：当 state 上存在 rngState 时，用 seeded RNG 推进；
+  // 调用方可显式注入 random/genId 覆盖（通常仅测试场景使用）。
+  const seededRng: SeededRng | null =
+    random == null && state.rngState != null
+      ? createSeededRng(state.rngState)
+      : null;
+  const effectiveRandom: () => number = random ?? (seededRng ? () => seededRng.next() : Math.random);
+
+  let localCounter = state.idCounter ?? 0;
+  const effectiveGenId: () => string =
+    genId ?? (state.idCounter != null
+      ? () => `${state.roomId}-${++localCounter}`
+      : () => crypto.randomUUID());
+
+  const result = reduceInner(state, side, command, config, effectiveRandom, effectiveGenId);
+
+  // 将推进后的 rngState / idCounter 写回返回值（仅 state-backed 模式）
+  if (seededRng || state.rngState != null || state.idCounter != null) {
+    return {
+      ...result,
+      ...(seededRng ? { rngState: seededRng.state() } : {}),
+      ...(state.idCounter != null ? { idCounter: localCounter } : {}),
+    };
+  }
+  return result;
+}
+
+function reduceInner(
+  state: InternalMatchState,
+  side: PlayerSide,
+  command: ClientCommand,
+  config: EngineConfig,
+  random: () => number,
+  genId: () => string
 ): InternalMatchState {
   switch (command.type) {
     case CMD.READY:

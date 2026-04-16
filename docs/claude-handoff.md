@@ -2,6 +2,17 @@
 
 > 当前项目已从“概念验证”进入**可持续推进的技术原型**阶段。后续推进以规则正确性与可复现性优先。
 
+## 最近一轮更新（RNG + Schema 收口）
+
+- 引擎新增统一 seeded RNG 模块（`packages/engine/src/rng.ts`），提供 `createSeededRng` / `hashStringToSeed` / `createSeededIdFactory`。
+- 关键随机路径（`shuffle` / `draw` / `reshuffle` / `createMarketState` / `applyEffects` 等）的 RNG 来源统一可注入；当 `InternalMatchState.rngState` 存在时，`reduce` 自动以 seeded RNG 推进并回写 `rngState` 与 `idCounter`。
+- `createSeededMatchState(roomId, ruleset, names, seed)` 为可复现对局的官方入口；server 侧 `GameRoom` 会基于 `hashStringToSeed(roomId)` 写入 `initialSeed / rngState / idCounter`，并将 `initialSeed` 挂到 `MatchSnapshot`。
+- `MatchSnapshot.initialSeed` 与 `InternalMatchState.rngState / idCounter / initialSeed` 为**后续重建**留出最小基础，当前 replay 仍以日志查看为主，但已具备“同 seed + 同命令流 → 同关键结果”的引擎验证能力。
+- effect schema 由宽松 `{op + additionalProperties: true}` 改为按 op 的 `oneOf` 分支，每支 `additionalProperties: false`，`drawThenDiscard` 由 `count` 统一为 `drawCount / discardCount`（engine 与 data 同步）。
+- 新测试：
+  - `packages/engine/src/__tests__/determinism.test.ts`（5 条，最小可复现性验证）
+  - `packages/schemas/src/__tests__/effect-schema.test.ts`（6 条，聚焦 schema 收紧）
+
 ## 1. 当前基线与对齐原则
 
 - 项目基线：以 `main` 分支代码语义为准。

@@ -23,7 +23,11 @@ export type CardEffect =
   | { op: "gainBlock"; amount: number }
   | { op: "heal"; amount: number }
   | { op: "draw"; count: number }
-  | { op: "drawThenDiscard"; count: number }
+  /**
+   * drawThenDiscard：先抽 drawCount 张，再从手牌顶弃 discardCount 张。
+   * drawCount 与 discardCount 可以不同（如抽 2 弃 1 即“过滤”效果）。
+   */
+  | { op: "drawThenDiscard"; drawCount: number; discardCount: number }
   /** 给指定目标（默认对手）产生压力牌（status_pressure）到其手牌 */
   | { op: "createPressure"; count: number; target?: "opponent" | "self" }
   /**
@@ -279,8 +283,8 @@ function applySingleEffect(
       return draw(player, effect.count, random);
 
     case "drawThenDiscard": {
-      const afterDraw = draw(player, effect.count, random);
-      const discardCount = Math.min(effect.count, afterDraw.hand.length);
+      const afterDraw = draw(player, effect.drawCount, random);
+      const discardCount = Math.min(effect.discardCount, afterDraw.hand.length);
       const toDiscard = afterDraw.hand.slice(0, discardCount);
       const remaining = afterDraw.hand.slice(discardCount);
       return {

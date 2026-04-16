@@ -34,18 +34,32 @@
 - Public/Private 视图分层已落地。
 - 场馆耐久字段（`durability/maxDurability`）已在公开视图与客户端显示链路中。
 
+### 7) 可复现性基础（Mulberry32 seeded RNG）
+- 统一 RNG 模块：`packages/engine/src/rng.ts`（`createSeededRng` / `hashStringToSeed` / `createSeededIdFactory`）。
+- 关键随机路径全部通过注入 RNG：`shuffle` / `draw` / `reshuffle` / `createMarketState` / `applyEffects(scry/draw)`。
+- `InternalMatchState` 新增 `initialSeed / rngState / idCounter`（均可选，旧状态兼容）。
+- `reduce` 在 `state.rngState` 存在时自动使用 seeded RNG，并把推进后的 `rngState / idCounter` 写回返回值。
+- `GameRoom` 基于 `hashStringToSeed(roomId)` 初始化 seed，并把 `initialSeed` 写入 `MatchSnapshot`。
+- 引擎层已具备“同 seed + 同命令流 → 同关键结果”的最小验证（见 `determinism.test.ts`）。
+
+### 8) effect schema 收紧
+- `card-rule.schema.json` 中的 Effect 按 op 分支改为 `oneOf`，每支 `additionalProperties: false`。
+- 统一 `drawThenDiscard` 字段为 `drawCount / discardCount`（engine 与 data 同步）。
+- 新增 TargetedEffect 分支（`damageVenue` / `dealDamage`），`chooseTarget.onChosen` 只接受 TargetedEffect。
+- `Ability.condition` 收口为 `{ type: ... }` 对象格式（与引擎 `CardCondition` 对齐）。
+
 ## 未完成 ❌
 
 ### 1) 规则正确性与一致性（优先）
 - 日程槽“可安排对象、触发时机、客户端交互入口”的一致性仍需持续收敛。
 - 攻击场馆的客户端可操作入口与 guard 场景交互仍不完整。
 
-### 2) 可复现性（优先）
-- 尚未完成统一 deterministic RNG 策略。
-- 回放尚未达到“逐事件可重建并可校验一致”的目标。
+### 2) 可复现性（部分完成）
+- 基础 seeded RNG 已落地；但完整回放（逐事件重建并渲染）尚未实现。
+- 当前已满足“同 seed + 同命令流 → 引擎关键结果一致”的最小条件；后续需要把命令流回放 + 视图重播串联。
 
-### 3) 规则与数据约束
-- effect schema 与 engine 读取约束仍偏松，存在字段漂移风险。
+### 3) 规则与数据约束（效果 schema 已收紧）
+- effect schema 已从松散 `additionalProperties: true` 改为按 op 的 `oneOf`；data 与 engine 的 `drawThenDiscard` 字段已统一。
 - 市场供给模型仍偏薄（接近 singleton），尚未转向 rarity copies。
 
 ### 4) 内容与平衡

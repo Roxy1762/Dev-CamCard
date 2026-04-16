@@ -1,6 +1,7 @@
 import type { Lane } from "@dev-camcard/protocol";
 import type { CardInstance, InternalMatchState, InternalPlayerState, MarketLaneState } from "./types";
 import { shuffle } from "./deck";
+import { createSeededRng, createSeededIdFactory, hashStringToSeed, type SeededRng } from "./rng";
 
 /**
  * RulesetConfig — 引擎初始化所需的规则集参数。
@@ -105,6 +106,49 @@ export function createMatchState(
     winner: null,
     pendingChoice: null,
   };
+}
+
+/**
+ * createSeededMatchState — 一步创建带 seed / rngState / idCounter 的完整初始状态。
+ *
+ * 该函数是可复现回放的官方入口。使用时：
+ *  - 调用方传入（或派生）一个 number seed；
+ *  - 返回的 state 已包含 initialSeed / rngState / idCounter；
+ *  - 返回的 rng / genId 会与 state 共享 seed 推进，可继续用于 createMarketState 等首轮初始化；
+ *  - 调用完 createMarketState 等初始化后，记得把最新 rng.state() 与 counter 写回 state.rngState / state.idCounter。
+ *
+ * 如果只想得到一个无 seed 的传统 state，继续使用 createMatchState 即可。
+ *
+ * @param roomId      房间 ID（同时作为 instanceId 前缀）
+ * @param ruleset     规则集配置
+ * @param playerNames 两位玩家显示名
+ * @param seed        RNG seed；传入字符串将被 hashStringToSeed 转换
+ */
+export function createSeededMatchState(
+  roomId: string,
+  ruleset: RulesetConfig,
+  playerNames: [string, string],
+  seed: number | string
+): {
+  state: InternalMatchState;
+  rng: SeededRng;
+  genId: () => string;
+  counter: () => number;
+} {
+  const numericSeed = typeof seed === "string" ? hashStringToSeed(seed) : (seed | 0) >>> 0;
+  const rng = createSeededRng(numericSeed);
+  const { genId, counter } = createSeededIdFactory(roomId);
+
+  const base = createMatchState(roomId, ruleset, playerNames, genId);
+
+  const state: InternalMatchState = {
+    ...base,
+    initialSeed: numericSeed,
+    rngState: rng.state(),
+    idCounter: counter(),
+  };
+
+  return { state, rng, genId, counter };
 }
 
 // ── 内部辅助 ──────────────────────────────────────────────────────────────────

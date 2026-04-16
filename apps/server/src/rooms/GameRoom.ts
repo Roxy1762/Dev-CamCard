@@ -9,8 +9,10 @@ import {
   reduce,
   toPublicMatchView,
   toPrivatePlayerView,
+  createSeededRng,
+  hashStringToSeed,
 } from "@dev-camcard/engine";
-import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef } from "@dev-camcard/engine";
+import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef, SeededRng } from "@dev-camcard/engine";
 import {
   loadRuleBatch,
   assertRulesetDef,
@@ -144,20 +146,43 @@ export class GameRoom extends Room {
     this.matchEvents.push({ seq: this.eventSeq++, ts: Date.now(), type, side, data });
   }
 
-  onCreate(_options: unknown): void {
+  onCreate(options: unknown): void {
+    const opts = (options ?? {}) as { seed?: number | string };
+    // 由 roomId 派生的确定性 seed；调用方可通过 options.seed 显式注入（测试友好）
+    const initialSeed =
+      opts.seed != null
+        ? typeof opts.seed === "string"
+          ? hashStringToSeed(opts.seed)
+          : opts.seed >>> 0
+        : hashStringToSeed(this.roomId);
+    const rng: SeededRng = createSeededRng(initialSeed);
+
     const baseState = createMatchState(this.roomId, ruleset, ["玩家一", "玩家二"], this.genId);
 
     // 用引擎纯函数构造真实市场状态（每栏公开 2 张，其余入隐藏牌堆，已洗牌）
+    // 用 seeded rng 洗牌 —— 保证相同 seed 下市场初始布局一致
     const laneDefinitions = buildLaneDefinitions(marketRules, ruleset.marketLanesCount);
-    const market = createMarketState(laneDefinitions, ruleset.marketSlotsPerLane, this.genId);
-    this.matchState = { ...baseState, market };
+    const market = createMarketState(
+      laneDefinitions,
+      ruleset.marketSlotsPerLane,
+      this.genId,
+      () => rng.next()
+    );
+    this.matchState = {
+      ...baseState,
+      market,
+      initialSeed,
+      rngState: rng.state(),
+      idCounter: this.idCounter,
+    };
 
-    // 初始化快照元数据
+    // 初始化快照元数据（含 seed，供回放重建使用）
     this.matchSnapshot = {
       matchId: this.roomId,
       rulesetVersion: RULESET_FILE.replace("data/rulesets/", "").replace(".json", ""),
       contentSets: CONTENT_SETS.map((p) => p.split("/").pop()!.replace(".json", "")),
       startedAt: Date.now(),
+      initialSeed,
     };
 
     // 记录对局开始事件

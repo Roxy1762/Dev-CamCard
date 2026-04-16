@@ -110,6 +110,17 @@ packages/schemas/schemas/
 
 所有数据文件必须通过 AJV 校验（non-negotiables.md 约束）。`packages/schemas/src/validators.ts` 中暴露对应的 `checkXxx` / `assertXxx` 函数。
 
+### Effect schema 收口（2026-04）
+
+`card-rule.schema.json` 中的 `Effect` 已从松散格式（仅约束 `op`、其余 `additionalProperties: true`）改为按 op 的 `oneOf` 分支，每支都 `additionalProperties: false`。约束要点：
+
+- 每个 op（如 `gainResource` / `draw` / `scry` / `createPressure` / `queueDelayedDiscard` / `trashFromHandOrDiscard` / `gainFaceUpCard` / `setFlag` / `chooseTarget` 等）只接受其自身声明的字段，多余字段直接被拒。
+- `drawThenDiscard` 统一为 `drawCount + discardCount`（旧 `count` 已废弃；engine 与 data 同步更新）。
+- `chooseTarget.onChosen` 只接受 `TargetedEffect`（当前为 `damageVenue` / `dealDamage`），不允许放置 `gainResource` 等自身效果。
+- `Ability.condition` 收口为 `{ type: ... }` 对象格式，和引擎 `CardCondition` 对齐（枚举：`firstActionThisTurn` / `actionsPlayedAtLeast` / `hasVenue` / `hasScheduledCard` / `hasReservedCard`）。
+
+目标：避免内容侧新增未被引擎正确消费的 effect 字段，阻断数据漂移。所有现网规则数据已在收紧后的 schema 下通过校验。
+
 ---
 
 ## 如何加新语言
