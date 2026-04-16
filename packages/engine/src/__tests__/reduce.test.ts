@@ -97,6 +97,14 @@ const CARD_DEFS: Record<string, CardDef> = {
     type: "action",
     abilities: [{ trigger: "onPlay", effects: [{ op: "drawThenDiscard", count: 1 }] }],
   },
+  test_schedule_combo: {
+    id: "test_schedule_combo",
+    type: "action",
+    abilities: [
+      { trigger: "onPlay", effects: [{ op: "gainAttack", amount: 1 }] },
+      { trigger: "onScheduleResolve", effects: [{ op: "gainAttack", amount: 3 }] },
+    ],
+  },
 };
 
 const CONFIG: EngineConfig = {
@@ -601,8 +609,8 @@ describe("reduce: PUT_CARD_TO_SCHEDULE", () => {
     return { ...base, players };
   }
 
-  it("可将手牌放入空日程槽", () => {
-    const state = stateWithCardInHand("starter_allowance");
+  it("可将手牌打出并放入空日程槽（先结算 onPlay）", () => {
+    const state = stateWithCardInHand("test_schedule_combo");
     const result = reduce(
       state, 0,
       { type: "PUT_CARD_TO_SCHEDULE", instanceId: "sched-card", slotIndex: 0 },
@@ -610,10 +618,12 @@ describe("reduce: PUT_CARD_TO_SCHEDULE", () => {
     );
     expect(result.players[0].scheduleSlots[0]).toMatchObject({ instanceId: "sched-card" });
     expect(result.players[0].hand).toHaveLength(0);
+    expect(result.players[0].attackPool).toBe(1);
+    expect(result.players[0].played).toHaveLength(0);
   });
 
   it("日程槽已占用时抛出错误", () => {
-    const base = stateWithCardInHand("starter_allowance");
+    const base = stateWithCardInHand("test_schedule_combo");
     const occupier: CardInstance = { instanceId: "occupier", cardId: "starter_quarrel" };
     const state: InternalMatchState = {
       ...base,
@@ -628,47 +638,36 @@ describe("reduce: PUT_CARD_TO_SCHEDULE", () => {
   });
 
   it("手牌中不存在时抛出错误", () => {
-    const state = stateWithCardInHand("starter_allowance");
+    const state = stateWithCardInHand("test_schedule_combo");
     expect(() =>
       reduce(state, 0, { type: "PUT_CARD_TO_SCHEDULE", instanceId: "no-such-card", slotIndex: 1 }, CONFIG)
     ).toThrow();
   });
 
-  it("下一回合开始时结算日程槽并移入弃牌堆", () => {
-    // 将 starter_allowance（onScheduleResolve 无效果，但 onPlay gainResource 2）放入日程槽
-    // 我们需要一张有 onScheduleResolve 效果的卡
-    // 使用自定义 CONFIG
-    const schedCard: CardInstance = { instanceId: "sc-inst", cardId: "red_pre_match_warmup_test" };
-    const extraDefs: Record<string, typeof CARD_DEFS[string]> = {
-      red_pre_match_warmup_test: {
-        id: "red_pre_match_warmup_test",
-        type: "action",
-        abilities: [
-          { trigger: "onPlay", effects: [{ op: "gainAttack", amount: 1 }] },
-          { trigger: "onScheduleResolve", effects: [{ op: "gainAttack", amount: 3 }] },
-        ],
-      },
-    };
-    const testConfig: EngineConfig = {
-      ...CONFIG,
-      getCardDef: (id) => extraDefs[id] ?? CARD_DEFS[id],
-    };
+  it("没有 onScheduleResolve 的牌不可安排", () => {
+    const state = stateWithCardInHand("starter_allowance");
+    expect(() =>
+      reduce(state, 0, { type: "PUT_CARD_TO_SCHEDULE", instanceId: "sched-card", slotIndex: 0 }, CONFIG)
+    ).toThrow("没有可安排的延迟效果");
+  });
 
-    let state = startedState();
-    // 手动放入日程槽
-    const players: [InternalPlayerState, InternalPlayerState] = [
-      { ...state.players[0], scheduleSlots: [schedCard, null] },
-      state.players[1],
-    ];
-    state = { ...state, players };
+  it("下一回合开始时结算日程槽并移入弃牌堆", () => {
+    let state = stateWithCardInHand("test_schedule_combo", "sc-inst");
+    state = reduce(
+      state,
+      0,
+      { type: "PUT_CARD_TO_SCHEDULE", instanceId: "sc-inst", slotIndex: 0 },
+      CONFIG
+    );
+    expect(state.players[0].attackPool).toBe(1);
 
     // 结束 side=0 的回合 → beginTurn(side=1) → 然后 side=1 结束 → beginTurn(side=0) 结算日程槽
-    state = reduce(state, 0, { type: "END_TURN" }, testConfig, deterministicRandom, genId);
+    state = reduce(state, 0, { type: "END_TURN" }, CONFIG, deterministicRandom, genId);
     // 现在是 side=1 的回合，日程槽未结算（只有在 side=0 的回合开始时结算）
     expect(state.players[0].scheduleSlots[0]).not.toBeNull();
 
-    state = reduce(state, 1, { type: "END_TURN" }, testConfig, deterministicRandom, genId);
-    // 现在是 side=0 的回合开始：日程槽应已结算（gainAttack 3）并移入弃牌堆
+    state = reduce(state, 1, { type: "END_TURN" }, CONFIG, deterministicRandom, genId);
+    // 现在是 side=0 的回合开始：日程槽应已结算（gainAttack +3）并移入弃牌堆
     expect(state.players[0].scheduleSlots[0]).toBeNull();
     expect(state.players[0].attackPool).toBe(3);
     expect(state.players[0].discard.some((c) => c.instanceId === "sc-inst")).toBe(true);
