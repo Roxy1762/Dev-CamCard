@@ -312,7 +312,7 @@ export class RoomScene extends Phaser.Scene {
         });
 
         if (freeSlotIdx !== -1) {
-          this.btn(cx, HAND_Y + CARD_H - 24, CARD_W, 22, `安排→槽${freeSlotIdx + 1}`, 9, C_BTN_SCH, C_BTN_TXT, () => {
+          this.btn(cx, HAND_Y + CARD_H - 24, CARD_W, 22, `打出并安排→槽${freeSlotIdx + 1}`, 9, C_BTN_SCH, C_BTN_TXT, () => {
             this.roomClient.send({
               type: CMD.PUT_CARD_TO_SCHEDULE,
               instanceId: card.instanceId,

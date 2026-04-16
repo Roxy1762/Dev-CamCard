@@ -70,7 +70,15 @@ export function reduce(
       assertActive(state, side);
       assertStarted(state);
       assertNoPendingChoice(state);
-      return handlePutCardToSchedule(state, side, command.instanceId, command.slotIndex);
+      return handlePutCardToSchedule(
+        state,
+        side,
+        command.instanceId,
+        command.slotIndex,
+        config,
+        random,
+        genId
+      );
 
     case CMD.ACTIVATE_VENUE:
       assertActive(state, side);
@@ -235,7 +243,10 @@ function handlePutCardToSchedule(
   state: InternalMatchState,
   side: PlayerSide,
   instanceId: string,
-  slotIndex: number
+  slotIndex: number,
+  config: EngineConfig,
+  random: () => number,
+  genId: () => string
 ): InternalMatchState {
   const player = state.players[side];
 
@@ -252,20 +263,41 @@ function handlePutCardToSchedule(
   }
 
   const card = player.hand[cardIdx];
+  const cardDef = config.getCardDef(card.cardId);
+  if (!cardDef) {
+    throw new Error(`未找到卡牌定义: ${card.cardId}`);
+  }
+  if (cardDef.type !== "action") {
+    throw new Error(`仅行动牌可安排: ${card.cardId}`);
+  }
+  if (cardDef.isPressure) {
+    throw new Error(`压力牌不可安排: ${card.cardId}`);
+  }
+  if (!cardDef.abilities.some((a) => a.trigger === "onScheduleResolve")) {
+    throw new Error(`该牌没有可安排的延迟效果: ${card.cardId}`);
+  }
+
   const newHand = player.hand.filter((_, i) => i !== cardIdx);
-  const newSlots = player.scheduleSlots.map((s, i) =>
-    i === slotIndex ? card : s
-  ) as (CardInstance | null)[];
+  const newSlots = player.scheduleSlots.map((s, i) => (i === slotIndex ? card : s)) as (CardInstance | null)[];
+  let updatedPlayer: InternalPlayerState = { ...player, hand: newHand, scheduleSlots: newSlots };
 
-  const updatedPlayer: InternalPlayerState = {
-    ...player,
-    hand: newHand,
-    scheduleSlots: newSlots,
-  };
+  // 安排语义：先打出（执行 onPlay），再把牌置于日程槽等待下回合结算 onScheduleResolve
+  let s = state;
+  for (const ability of cardDef.abilities) {
+    if (ability.trigger !== "onPlay") continue;
+    if (ability.condition && !checkCondition(updatedPlayer, ability.condition)) continue;
 
-  const players = clonePlayers(state);
-  players[side] = updatedPlayer;
-  return { ...state, players };
+    const players = clonePlayers(s);
+    players[side] = updatedPlayer;
+    s = { ...s, players };
+    s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId, config.getCardCost);
+    updatedPlayer = s.players[side];
+    if (s.pendingChoice) break;
+  }
+
+  const finalPlayers = clonePlayers(s);
+  finalPlayers[side] = updatedPlayer;
+  return { ...s, players: finalPlayers };
 }
 
 // ── ACTIVATE_VENUE ────────────────────────────────────────────────────────────
