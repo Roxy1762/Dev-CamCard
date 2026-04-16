@@ -229,13 +229,70 @@ describe("data/sets/ 文件校验", () => {
     expect(r.valid).toBe(true);
   });
 
-  it("core-v1 包含全部 23 张卡牌（starter+supply+status+market，含本轮新增 4 张）", () => {
+  it("core-v1 包含全部 38 张卡牌（starter+supply+status+market）", () => {
     const s = loadJson("data/sets/core-v1.json") as { cardIds: string[] };
-    expect(s.cardIds.length).toBe(23);
+    expect(s.cardIds.length).toBe(38);
     expect(s.cardIds).toContain("green_used_book_recycle");
     expect(s.cardIds).toContain("blue_draft_simulation");
     expect(s.cardIds).toContain("green_anniversary_sponsor");
     expect(s.cardIds).toContain("red_cheer_combo");
+    expect(s.cardIds).toContain("green_find_sponsorship");
+    expect(s.cardIds).toContain("green_planning_meeting");
+    expect(s.cardIds).toContain("neutral_campus_broadcast");
+  });
+});
+
+describe("market-core 新增能力牌最小校验", () => {
+  function loadMarketRules() {
+    return loadCardRuleFile(DATA_ROOT, "data/cards/rules/market-core.json");
+  }
+
+  it("green_find_sponsorship 使用 gainFaceUpCard（maxCost=3，discard）", () => {
+    const rules = loadMarketRules();
+    const card = rules.find((c) => c.id === "green_find_sponsorship");
+    expect(card).toBeDefined();
+    const onPlay = card!.abilities.find((a) => a.trigger === "onPlay");
+    expect(onPlay?.effects).toContainEqual({
+      op: "gainFaceUpCard",
+      maxCost: 3,
+      destination: "discard",
+    });
+  });
+
+  it("green_planning_meeting 使用 gainFaceUpCard（maxCost=2，deckTop）", () => {
+    const rules = loadMarketRules();
+    const card = rules.find((c) => c.id === "green_planning_meeting");
+    expect(card).toBeDefined();
+    const onPlay = card!.abilities.find((a) => a.trigger === "onPlay");
+    expect(onPlay?.effects).toContainEqual({
+      op: "gainFaceUpCard",
+      maxCost: 2,
+      destination: "deckTop",
+    });
+  });
+
+  it("neutral_campus_broadcast 使用 chooseTarget(opponentPlayer + dealDamage)", () => {
+    const rules = loadMarketRules();
+    const card = rules.find((c) => c.id === "neutral_campus_broadcast");
+    expect(card).toBeDefined();
+    const onPlay = card!.abilities.find((a) => a.trigger === "onPlay");
+    expect(onPlay?.effects).toContainEqual({
+      op: "chooseTarget",
+      targetType: "opponentPlayer",
+      onChosen: [{ op: "dealDamage", amount: 2 }],
+    });
+  });
+
+  it("red_finals_day 使用 chooseTarget(opponentVenue + damageVenue)", () => {
+    const rules = loadMarketRules();
+    const card = rules.find((c) => c.id === "red_finals_day");
+    expect(card).toBeDefined();
+    const onPlay = card!.abilities.find((a) => a.trigger === "onPlay");
+    expect(onPlay?.effects).toContainEqual({
+      op: "chooseTarget",
+      targetType: "opponentVenue",
+      onChosen: [{ op: "damageVenue", amount: 3 }],
+    });
   });
 });
 

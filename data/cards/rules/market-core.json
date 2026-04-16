@@ -338,13 +338,23 @@
     "rarity": "common",
     "lane": "activity",
     "type": "action",
-    "tags": ["green", "club"],
+    "tags": [
+      "green",
+      "club"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "trashFromHandOrDiscard", "count": 1, "zone": "either" },
-          { "op": "gainResource", "amount": 2 }
+          {
+            "op": "trashFromHandOrDiscard",
+            "count": 1,
+            "zone": "either"
+          },
+          {
+            "op": "gainResource",
+            "amount": 2
+          }
         ]
       }
     ],
@@ -358,13 +368,23 @@
     "rarity": "uncommon",
     "lane": "course",
     "type": "action",
-    "tags": ["blue", "study"],
+    "tags": [
+      "blue",
+      "study"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "scry", "count": 3, "interactive": true },
-          { "op": "gainResource", "amount": 1 }
+          {
+            "op": "scry",
+            "count": 3,
+            "interactive": true
+          },
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
         ]
       }
     ],
@@ -378,13 +398,23 @@
     "rarity": "rare",
     "lane": "activity",
     "type": "action",
-    "tags": ["green", "club"],
+    "tags": [
+      "green",
+      "club"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "gainResource", "amount": 1 },
-          { "op": "gainFaceUpCard", "maxCost": 4, "destination": "discard" }
+          {
+            "op": "gainResource",
+            "amount": 1
+          },
+          {
+            "op": "gainFaceUpCard",
+            "maxCost": 4,
+            "destination": "discard"
+          }
         ]
       }
     ],
@@ -398,20 +428,490 @@
     "rarity": "common",
     "lane": "activity",
     "type": "action",
-    "tags": ["red", "sport"],
+    "tags": [
+      "red",
+      "sport"
+    ],
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "gainAttack", "amount": 1 },
+          {
+            "op": "gainAttack",
+            "amount": 1
+          },
           {
             "op": "chooseTarget",
             "targetType": "opponentVenue",
-            "onChosen": [{ "op": "damageVenue", "amount": 2 }]
+            "onChosen": [
+              {
+                "op": "damageVenue",
+                "amount": 2
+              }
+            ]
           }
         ]
       }
     ],
     "artKey": "red_cheer_combo"
+  },
+  {
+    "id": "red_sprint_start",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": [
+      "red",
+      "sport"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 1
+          },
+          {
+            "op": "chooseTarget",
+            "targetType": "opponentPlayer",
+            "onChosen": [
+              {
+                "op": "dealDamage",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "artKey": "red_sprint_start"
+  },
+  {
+    "id": "red_gym_booking",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "activity",
+    "type": "venue",
+    "isGuard": false,
+    "durability": 4,
+    "activationsPerTurn": 1,
+    "tags": [
+      "red",
+      "sport"
+    ],
+    "abilities": [
+      {
+        "trigger": "onActivate",
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 2
+          }
+        ]
+      }
+    ],
+    "artKey": "red_gym_booking"
+  },
+  {
+    "id": "red_finals_day",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 5,
+    "rarity": "rare",
+    "lane": "activity",
+    "type": "action",
+    "tags": [
+      "red",
+      "sport"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 2
+          },
+          {
+            "op": "chooseTarget",
+            "targetType": "opponentVenue",
+            "onChosen": [
+              {
+                "op": "damageVenue",
+                "amount": 3
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "artKey": "red_finals_day"
+  },
+  {
+    "id": "blue_class_notes",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "tags": [
+      "blue",
+      "study"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          },
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "blue_class_notes"
+  },
+  {
+    "id": "blue_mock_exam",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "tags": [
+      "blue",
+      "study"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "scry",
+            "count": 2,
+            "interactive": false
+          },
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "blue_mock_exam"
+  },
+  {
+    "id": "blue_mistake_book",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "course",
+    "type": "action",
+    "tags": [
+      "blue",
+      "study"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "drawThenDiscard",
+            "drawCount": 2,
+            "discardCount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "blue_mistake_book"
+  },
+  {
+    "id": "blue_study_room_seat",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 5,
+    "rarity": "rare",
+    "lane": "course",
+    "type": "venue",
+    "isGuard": false,
+    "durability": 5,
+    "activationsPerTurn": 1,
+    "tags": [
+      "blue",
+      "study"
+    ],
+    "abilities": [
+      {
+        "trigger": "onActivate",
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          },
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "blue_study_room_seat"
+  },
+  {
+    "id": "white_discipline_patrol",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "tags": [
+      "white",
+      "discipline"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainBlock",
+            "amount": 1
+          },
+          {
+            "op": "chooseTarget",
+            "targetType": "opponentPlayer",
+            "onChosen": [
+              {
+                "op": "dealDamage",
+                "amount": 1
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "artKey": "white_discipline_patrol"
+  },
+  {
+    "id": "green_recruiting_flyer",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": [
+      "green",
+      "club"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 1
+          },
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "green_recruiting_flyer"
+  },
+  {
+    "id": "green_find_sponsorship",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "activity",
+    "type": "action",
+    "tags": [
+      "green",
+      "club"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 1
+          },
+          {
+            "op": "gainFaceUpCard",
+            "maxCost": 3,
+            "destination": "discard"
+          }
+        ]
+      }
+    ],
+    "artKey": "green_find_sponsorship"
+  },
+  {
+    "id": "green_planning_meeting",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": [
+      "green",
+      "club"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          },
+          {
+            "op": "gainFaceUpCard",
+            "maxCost": 2,
+            "destination": "deckTop"
+          }
+        ]
+      }
+    ],
+    "artKey": "green_planning_meeting"
+  },
+  {
+    "id": "neutral_convenience_snack",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "tags": [
+      "neutral"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 1
+          },
+          {
+            "op": "heal",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "neutral_convenience_snack"
+  },
+  {
+    "id": "neutral_library_closing",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "tags": [
+      "neutral"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "queueDelayedDiscard",
+            "count": 1,
+            "target": "self"
+          },
+          {
+            "op": "draw",
+            "count": 2
+          }
+        ]
+      }
+    ],
+    "artKey": "neutral_library_closing"
+  },
+  {
+    "id": "neutral_seat_swap",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "tags": [
+      "neutral"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "drawThenDiscard",
+            "drawCount": 1,
+            "discardCount": 1
+          },
+          {
+            "op": "gainBlock",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "neutral_seat_swap"
+  },
+  {
+    "id": "neutral_campus_broadcast",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "daily",
+    "type": "action",
+    "tags": [
+      "neutral"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "chooseTarget",
+            "targetType": "opponentPlayer",
+            "onChosen": [
+              {
+                "op": "dealDamage",
+                "amount": 2
+              }
+            ]
+          },
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "neutral_campus_broadcast"
   }
 ]
