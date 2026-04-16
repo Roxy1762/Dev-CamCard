@@ -45,6 +45,14 @@
     "neutral_finals_week": {
       "name": "期末周",
       "body": "压力来临！给对方产生 2 压力，自己也产生 1 压力。"
+    },
+    "green_used_book_recycle": {
+      "name": "旧书回收",
+      "body": "从手牌或弃牌堆中报废最多 1 张牌，获得 2 资源。"
+    },
+    "blue_draft_simulation": {
+      "name": "模拟草稿",
+      "body": "预习 3 张：查看牌堆顶 3 张，可弃掉其中 1 张，其余原序放回。然后获得 1 资源。"
     }
   }
 }

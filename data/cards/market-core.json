@@ -240,5 +240,49 @@
         ]
       }
     ]
+  },
+  {
+    "id": "green_used_book_recycle",
+    "version": 1,
+    "name": "旧书回收",
+    "cost": 3,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": ["green", "club"],
+    "text": {
+      "body": "从手牌或弃牌堆中报废最多 1 张牌，获得 2 资源。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "trashFromHandOrDiscard", "count": 1, "zone": "either" },
+          { "op": "gainResource", "amount": 2 }
+        ]
+      }
+    ]
+  },
+  {
+    "id": "blue_draft_simulation",
+    "version": 1,
+    "name": "模拟草稿",
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "course",
+    "type": "action",
+    "tags": ["blue", "study"],
+    "text": {
+      "body": "预习 3 张：查看牌堆顶 3 张，可弃掉其中 1 张，其余原序放回。然后获得 1 资源。"
+    },
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "scry", "count": 3, "interactive": true },
+          { "op": "gainResource", "amount": 1 }
+        ]
+      }
+    ]
   }
 ]

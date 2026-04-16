@@ -78,13 +78,66 @@ export interface PublicMatchView {
   started: boolean;
   ended: boolean;
   winner: PlayerSide | null;
+  /**
+   * 当前是否有待处理选择（公开部分）。
+   * 仅暴露等待方，不暴露选项内容（选项内容在 PrivatePlayerView.pendingChoice）。
+   */
+  pendingChoiceSide: PlayerSide | null;
 }
+
+// ── 待处理选择视图（私有，仅发给对应玩家）────────────────────────────────────
+
+/**
+ * PendingChoiceView — 待处理选择的客户端视图（不含引擎内部字段）。
+ *
+ * 对应关系：
+ *  chooseCardsFromHand          → 从 PrivatePlayerView.hand 中选
+ *  chooseCardsFromDiscard       → 从 PrivatePlayerView.discard 中选
+ *  chooseCardsFromHandOrDiscard → 从 hand 或 discard 中选
+ *  scryDecision                 → 从 revealedCards 中选要弃掉的牌
+ */
+export type PendingChoiceView =
+  | {
+      type: "chooseCardsFromHand";
+      /** 最少选择张数（0 = 可以跳过） */
+      minCount: number;
+      /** 最多选择张数 */
+      maxCount: number;
+    }
+  | {
+      type: "chooseCardsFromDiscard";
+      minCount: number;
+      maxCount: number;
+    }
+  | {
+      type: "chooseCardsFromHandOrDiscard";
+      minCount: number;
+      maxCount: number;
+    }
+  | {
+      type: "scryDecision";
+      /** 已翻开的牌（可见，玩家从中选择要弃掉的） */
+      revealedCards: PublicCardRef[];
+      /** 最多可弃几张（MVP = 1） */
+      maxDiscard: number;
+    };
 
 /**
  * 私有玩家视图 — 仅发给对应玩家自己。
- * 包含手牌信息，不可广播。
+ * 包含手牌、弃牌堆与待处理选择，不可广播。
  */
 export interface PrivatePlayerView {
   side: PlayerSide;
+  /** 当前手牌（含 instanceId） */
   hand: PublicCardRef[];
+  /**
+   * 己方弃牌堆（面朝上，全部可见）。
+   * 在 trashFromHandOrDiscard 等需要选弃牌堆的效果时供客户端展示。
+   */
+  discard: PublicCardRef[];
+  /**
+   * 当前待处理选择（非 null 时表示需要玩家响应）。
+   * 此时除 SUBMIT_CHOICE 外所有操作均被拒绝。
+   */
+  pendingChoice: PendingChoiceView | null;
 }

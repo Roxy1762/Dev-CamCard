@@ -103,6 +103,7 @@ export function createMatchState(
     started: false,
     ended: false,
     winner: null,
+    pendingChoice: null,
   };
 }
 
