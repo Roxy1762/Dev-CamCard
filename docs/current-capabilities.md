@@ -14,6 +14,31 @@
 - [x] Phaser + Colyseus 联机牌桌（BootScene + RoomScene）
 - [x] 数据文件（starter / fixed-supplies / market-core / status / core-v1 ruleset）
 
+### 断线重连
+
+- [x] **服务端 allowReconnection**：`onLeave` 改为 async，调用 `allowReconnection(client, 60)`（60 秒超时）
+- [x] 重连成功后自动重发 `STATE_UPDATE + PRIVATE_UPDATE + MATCH_EVENTS`
+- [x] 主动离开（consented=true）立即清理，不等待重连
+- [x] **客户端 reconnectionToken**：`RoomClient.joinOrCreate` 成功后存入 `localStorage`
+- [x] **客户端 reconnect()**：读取 localStorage token → `client.reconnect(token)`
+- [x] **BootScene 重连流程**：先尝试重连，失败则 fallback 到 `joinOrCreate`
+- [x] **pendingChoice 恢复**：重连后 `PRIVATE_UPDATE` 包含 `pendingChoice`，选择 UI 自动恢复
+- [x] **私有视图恢复**：重连后手牌 / 弃牌堆 / pendingChoice 均从最新 `PRIVATE_UPDATE` 恢复
+
+### 最小事件日志 + 快照骨架
+
+- [x] **协议类型**：`MatchEvent`、`MatchSnapshot`、`MatchEventLog`（`packages/protocol/src/events.ts`）
+- [x] **`EVT.MATCH_EVENTS`** 常量
+- [x] **服务端内存事件流**：`matchEvents: MatchEvent[]`，seq 单调递增，含 ts
+- [x] **MatchSnapshot**：matchId / rulesetVersion / contentSets / startedAt
+- [x] **事件覆盖**：MATCH_START / 所有 CMD.* / MATCH_END（对局结束时自动追加）
+- [x] **payload 精简**：每条事件只保留 instanceId / cardId / slotIndex / selectedInstanceIds / assignments（不存完整状态）
+- [x] **主动推送**：加入 / 重连时服务端自动发送 `MATCH_EVENTS`
+- [x] **拉取接口**：客户端可发送 `REQUEST_MATCH_EVENTS` 拉取完整日志
+- [x] **RoomScene 底部日志条**：展示最近 4 条事件摘要 + "查看回放"按钮
+- [x] **pendingDiscardCount 提示**：`drawMyInfo` 中 pendingDiscardCount > 0 时显示 ⚠ 黄色文本
+- [x] **ReplayScene**：最小事件日志展示（seq / ts / type / side / data），支持分页，监听 `onEventLog` 自动刷新
+
 ### 规则引擎（engine）
 
 - [x] 1v1 基础对局流程（READY → 开局 → 回合交替 → 胜负）
@@ -91,26 +116,27 @@
 - [x] SUBMIT_CHOICE 自动通过 reduce → resolveChoice 处理（含 getCardCost 透传）
 - [x] **v2 内容加载**：GameRoom.ts 从 `data/cards/rules/*.json` 加载
 - [x] **AJV 运行时校验**：card rule / card text / set / content-pack / ruleset 全程受 schema 保护
+- [x] **断线重连**：`allowReconnection(client, 60)`，重连后推送完整状态
+- [x] **事件日志**：内存事件流，加入 / 重连 / REQUEST_MATCH_EVENTS 时推送
 
 ### 客户端（game-client）
 
-- [x] Phaser 场景：BootScene + RoomScene
+- [x] Phaser 场景：BootScene + RoomScene + **ReplayScene**
 - [x] 基础交互：READY / 打牌 / 买牌 / 攻击 / 结束回合 / 场馆 / 日程槽
 - [x] 预约位 UI
-- [x] 选择 UI：有 pendingChoice 时显示遮罩 + 候选按钮 + 提交
-  - chooseCardsFrom* / scryDecision：原有卡牌选择 UI
-  - **gainFaceUpCardDecision**：市场牌候选列表，最多选 1 张，可跳过
-  - **chooseTarget**：目标按钮列表（玩家/场馆），选 1 个后确认
+- [x] 选择 UI：chooseFrom* / scryDecision / gainFaceUpCardDecision / chooseTarget
 - [x] **ViewModel 层**：`BoardViewModel` + `buildBoardViewModel`
 - [x] **client content-loader 集成**：`buildCardNames(locale)` → ViewModel 闭环
+- [x] **重连流程**：BootScene 先尝试 reconnect，失败 fallback 到 joinOrCreate
+- [x] **事件日志条**：RoomScene 底部展示最近 4 条事件 + 查看回放按钮
+- [x] **pendingDiscardCount 提示**：⚠ 黄色文本
+- [x] **ReplayScene**：事件列表展示，分页，onEventLog 自动刷新
 
 ### 数据层（内容系统）
 
 - [x] v2 内容系统（server 当前加载路径）
 - [x] JSON Schema 体系（含 `chooseTarget` 新增到 op 白名单）
-- [x] **23 张市场牌**（新增 green_anniversary_sponsor + red_cheer_combo）
-  - `green_anniversary_sponsor`：gainResource(1) + gainFaceUpCard(maxCost=4, discard)
-  - `red_cheer_combo`：gainAttack(1) + chooseTarget(opponentVenue, damageVenue 2)
+- [x] **23 张市场牌**（含 green_anniversary_sponsor + red_cheer_combo）
 
 ---
 
@@ -130,15 +156,14 @@
 
 ### 基础设施
 
-- [ ] 断线重连（Colyseus `allowReconnection` 未配置）
-- [ ] 回放记录（命令日志未持久化）
+- [ ] **回放完整播放器**：ReplayScene 目前为列表展示骨架，无逐步重建能力
+- [ ] **数据库持久化**：MatchEventLog 内存存储，未写入 PostgreSQL + Prisma
 - [ ] 数据库（PostgreSQL + Prisma 未初始化）
 
 ### 客户端体验
 
 - [ ] locale 运行时切换 UI
 - [ ] 攻击分配 UI 细化
-- [ ] 延迟弃牌视觉提示
 - [ ] 弃牌堆视图
 - [ ] 市场补位动画
 - [ ] 正式卡图接入
@@ -161,7 +186,7 @@
 | schema.test.ts | 34 |
 | delayedDiscard.test.ts | 19 |
 | pendingChoice.test.ts | 24 |
-| **gainFaceUpCard.test.ts** | **14** |
+| gainFaceUpCard.test.ts | 14 |
 | **小计** | **230** |
 
 ### schemas 包
@@ -179,6 +204,7 @@
 |------|--------|
 | viewmodel.test.ts | 13 |
 | locale.test.ts | 10 |
-| **小计** | **23** |
+| **eventLog.test.ts** | **8** |
+| **小计** | **31** |
 
-**总计：329 个测试（engine 230 + schemas 76 + game-client 23）**
+**总计：337 个测试（engine 230 + schemas 76 + game-client 31）**
