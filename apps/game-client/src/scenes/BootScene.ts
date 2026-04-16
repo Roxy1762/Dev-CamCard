@@ -10,10 +10,11 @@ import { buildCardNames, DEFAULT_LOCALE } from "../content/clientLocale";
  * 职责：
  *  1. 预加载占位资源
  *  2. 显示"正在连接..."占位文字
- *  3. 发起 Colyseus 连接
- *  4. 同时等待首个 PublicMatchView + PrivatePlayerView
- *  5. 两者均到达后切换到 RoomScene
- *  6. 连接失败则展示错误文本（不静默失败）
+ *  3. 尝试用 localStorage 中的 reconnectionToken 重连（最小断线恢复）
+ *  4. 重连失败则 fallback 到 joinOrCreate
+ *  5. 同时等待首个 PublicMatchView + PrivatePlayerView
+ *  6. 两者均到达后切换到 RoomScene
+ *  7. 连接失败则展示错误文本（不静默失败）
  */
 export class BootScene extends Phaser.Scene {
   constructor() {
@@ -74,7 +75,27 @@ export class BootScene extends Phaser.Scene {
       tryTransition();
     };
 
-    roomClient.joinOrCreate("game_room", {}).catch((err: unknown) => {
+    const connect = async () => {
+      // 若有存储的 reconnectionToken，先尝试重连
+      const hasToken = !!RoomClient.loadReconnectionToken();
+      if (hasToken) {
+        statusText.setText("检测到断线，尝试重连...");
+        try {
+          await roomClient.reconnect();
+          statusText.setText("重连成功，恢复对局...");
+          return; // 成功：等待 state_update + private_update
+        } catch {
+          // token 过期或服务端已销毁房间：清理并重新加入
+          RoomClient.clearReconnectionToken();
+          statusText.setText("重连失败，正在加入新房间...");
+        }
+      }
+
+      // 正常加入 / fallback
+      await roomClient.joinOrCreate("game_room", {});
+    };
+
+    connect().catch((err: unknown) => {
       const msg = err instanceof Error ? err.message : String(err);
       statusText.setText(`连接失败: ${msg}`);
       statusText.setColor("#ff6666");

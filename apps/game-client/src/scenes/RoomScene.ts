@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { PublicMatchView, PrivatePlayerView, PublicCardRef, PendingChoiceView } from "@dev-camcard/protocol";
+import type { PublicMatchView, PrivatePlayerView, PublicCardRef, PendingChoiceView, MatchEvent } from "@dev-camcard/protocol";
 import { CMD } from "@dev-camcard/protocol";
 import type { RoomClient } from "../network/RoomClient";
 import { buildBoardViewModel, type BoardViewModel } from "../viewmodel/BoardViewModel";
@@ -66,6 +66,9 @@ export class RoomScene extends Phaser.Scene {
    */
   private cardNames?: ReadonlyMap<string, string>;
 
+  /** 最小事件日志（最近 N 条，用于底部摘要显示） */
+  private recentEvents: MatchEvent[] = [];
+
   constructor() {
     super({ key: "RoomScene" });
   }
@@ -86,6 +89,11 @@ export class RoomScene extends Phaser.Scene {
     };
     this.roomClient.onPrivateUpdate = (pv: PrivatePlayerView) => {
       this.privateView = pv;
+      this.rebuildUI();
+    };
+    this.roomClient.onEventLog = (log) => {
+      // 保留最近 8 条事件供底部摘要显示
+      this.recentEvents = log.events.slice(-8);
       this.rebuildUI();
     };
 
@@ -118,6 +126,7 @@ export class RoomScene extends Phaser.Scene {
     this.drawMyInfo(vm);
     this.drawHandArea(vm);
     this.drawActionButtons(vm);
+    this.drawEventLogStrip();
   }
 
   // ── 顶栏 ─────────────────────────────────────────────────────────────────────
@@ -258,6 +267,12 @@ export class RoomScene extends Phaser.Scene {
     const schedParts = me.scheduleSlots.map((s, i) => `[${i + 1}: ${s ? vm.getCardName(s.id) : "空"}]`).join("  ");
     this.txt(10, y, `日程: ${schedParts}`, 11, C_LABEL);
     y += 18;
+
+    // pendingDiscardCount 提示（下回合开始时需丢弃）
+    if (me.pendingDiscardCount > 0) {
+      this.txt(10, y, `⚠ 下回合需弃 ${me.pendingDiscardCount} 张手牌`, 11, "#ffcc44");
+      y += 16;
+    }
 
     if (me.reservedCard) {
       this.txt(10, y, `预约位: [${vm.getCardName(me.reservedCard.id)}]`, 11, "#aaffaa");
@@ -552,6 +567,37 @@ export class RoomScene extends Phaser.Scene {
           : choice.targetType === "opponentVenue" ? "选择目标：对方场馆"
           : "选择目标：己方场馆";
     }
+  }
+
+  // ── 事件日志条（底部最近摘要）────────────────────────────────────────────────
+
+  private drawEventLogStrip(): void {
+    const W = this.cameras.main.width;
+    const H = this.cameras.main.height;
+    const STRIP_Y = H - 58;
+
+    if (this.recentEvents.length === 0) return;
+
+    this.hr(0, STRIP_Y - 2, W);
+    this.txt(10, STRIP_Y, "近期事件:", 9, "#555577");
+
+    // 显示最近 4 条
+    const shown = this.recentEvents.slice(-4);
+    shown.forEach((evt, i) => {
+      const sideLabel = evt.side !== undefined ? `P${evt.side + 1}` : "  ";
+      const line = `[${sideLabel}] ${evt.type}`;
+      this.txt(10 + i * Math.floor((W - 20) / 4), STRIP_Y + 11, line, 8, "#445566");
+    });
+
+    // 回放入口按钮
+    this.btn(W - 100, STRIP_Y, 90, 30, "查看回放", 9, "#222233", "#6688aa", () => {
+      this.roomClient.requestEventLog();
+      this.scene.start("ReplayScene", {
+        roomClient: this.roomClient,
+        cardNames: this.cardNames,
+        matchLog: this.recentEvents,
+      });
+    });
   }
 
   // ── UI 辅助工厂 ───────────────────────────────────────────────────────────────

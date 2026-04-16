@@ -1,11 +1,15 @@
 import { Client, type Room } from "colyseus.js";
-import type { PublicMatchView, PrivatePlayerView, ClientCommand } from "@dev-camcard/protocol";
+import type { PublicMatchView, PrivatePlayerView, ClientCommand, MatchEventLog } from "@dev-camcard/protocol";
 import { EVT } from "@dev-camcard/protocol";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "ws://localhost:2567";
 
+/** localStorage key — 存储上次的 reconnectionToken */
+const STORAGE_KEY = "devCamCard_reconnectionToken";
+
 export type StateUpdateHandler = (view: PublicMatchView) => void;
 export type PrivateUpdateHandler = (view: PrivatePlayerView) => void;
+export type EventLogHandler = (log: MatchEventLog) => void;
 
 /**
  * RoomClient — Colyseus 连接封装。
@@ -13,6 +17,11 @@ export type PrivateUpdateHandler = (view: PrivatePlayerView) => void;
  * 分层约束（non-negotiables.md）：
  *  - 客户端只接收公开视图与己方私有视图
  *  - 客户端只发送 Command，不发送结算结果
+ *
+ * 重连支持：
+ *  - joinOrCreate 成功后自动将 reconnectionToken 存入 localStorage
+ *  - reconnect() 使用存储的 token 尝试重连
+ *  - 重连成功后服务端会推送最新状态 + 事件日志
  */
 export class RoomClient {
   private readonly client: Client;
@@ -30,6 +39,12 @@ export class RoomClient {
    */
   public onPrivateUpdate: PrivateUpdateHandler | null = null;
 
+  /**
+   * 事件日志回调 — 每次收到 match_events 时调用。
+   * 重连后服务端会主动推送完整事件流。
+   */
+  public onEventLog: EventLogHandler | null = null;
+
   constructor(serverUrl: string = SERVER_URL) {
     this.client = new Client(serverUrl);
   }
@@ -42,14 +57,21 @@ export class RoomClient {
     options: Record<string, unknown>
   ): Promise<void> {
     this.room = await this.client.joinOrCreate(roomName, options);
+    this.saveReconnectionToken();
+    this.registerHandlers();
+  }
 
-    this.room.onMessage(EVT.STATE_UPDATE, (msg: PublicMatchView) => {
-      this.onStateUpdate?.(msg);
-    });
-
-    this.room.onMessage(EVT.PRIVATE_UPDATE, (msg: PrivatePlayerView) => {
-      this.onPrivateUpdate?.(msg);
-    });
+  /**
+   * 使用 localStorage 中的 reconnectionToken 重连已有房间。
+   * 成功后注册与 joinOrCreate 相同的消息处理器。
+   * 失败时抛出错误（调用方负责 fallback）。
+   */
+  async reconnect(): Promise<void> {
+    const token = RoomClient.loadReconnectionToken();
+    if (!token) throw new Error("no_token");
+    this.room = await this.client.reconnect(token);
+    this.saveReconnectionToken();
+    this.registerHandlers();
   }
 
   /**
@@ -63,15 +85,72 @@ export class RoomClient {
     this.room.send(type, payload);
   }
 
-  /** 主动离开房间 */
+  /**
+   * 向服务端请求完整事件日志（回放入口）。
+   */
+  requestEventLog(): void {
+    this.room?.send("REQUEST_MATCH_EVENTS", {});
+  }
+
+  /** 主动离开房间（清理 token，不需要重连） */
   leave(): void {
+    RoomClient.clearReconnectionToken();
     this.room?.leave();
     this.room = null;
     this.onStateUpdate = null;
     this.onPrivateUpdate = null;
+    this.onEventLog = null;
   }
 
   get roomId(): string | null {
     return this.room?.id ?? null;
+  }
+
+  // ── token 持久化 ─────────────────────────────────────────────────────────────
+
+  static loadReconnectionToken(): string | null {
+    try {
+      return localStorage.getItem(STORAGE_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  static clearReconnectionToken(): void {
+    try {
+      localStorage.removeItem(STORAGE_KEY);
+    } catch {
+      // ignore
+    }
+  }
+
+  private saveReconnectionToken(): void {
+    if (!this.room) return;
+    const token = (this.room as unknown as { reconnectionToken?: string }).reconnectionToken;
+    if (token) {
+      try {
+        localStorage.setItem(STORAGE_KEY, token);
+      } catch {
+        // ignore (SSR / private browsing)
+      }
+    }
+  }
+
+  // ── 消息处理器注册 ────────────────────────────────────────────────────────────
+
+  private registerHandlers(): void {
+    if (!this.room) return;
+
+    this.room.onMessage(EVT.STATE_UPDATE, (msg: PublicMatchView) => {
+      this.onStateUpdate?.(msg);
+    });
+
+    this.room.onMessage(EVT.PRIVATE_UPDATE, (msg: PrivatePlayerView) => {
+      this.onPrivateUpdate?.(msg);
+    });
+
+    this.room.onMessage(EVT.MATCH_EVENTS, (msg: MatchEventLog) => {
+      this.onEventLog?.(msg);
+    });
   }
 }
