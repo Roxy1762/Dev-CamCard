@@ -61,6 +61,66 @@
     "red_cheer_combo": {
       "name": "助威连击",
       "body": "获得 1 攻击。选择对方一座场馆，对其造成 2 点耐久伤害。"
+    },
+    "red_sprint_start": {
+      "name": "冲刺起跑",
+      "body": "获得 1 攻击。选择对手玩家，对其造成 1 点伤害。"
+    },
+    "red_gym_booking": {
+      "name": "体育馆预约",
+      "body": "【场馆】启动：获得 2 攻击。"
+    },
+    "red_finals_day": {
+      "name": "决赛日",
+      "body": "获得 2 攻击。选择对方一座场馆，对其造成 3 点耐久伤害。"
+    },
+    "blue_class_notes": {
+      "name": "课堂笔记",
+      "body": "摸 1 张牌，获得 1 资源。"
+    },
+    "blue_mock_exam": {
+      "name": "模拟测验",
+      "body": "预习 2 张（非交互重洗），然后获得 1 资源。"
+    },
+    "blue_mistake_book": {
+      "name": "错题本",
+      "body": "摸 2 张牌，然后弃 1 张牌。"
+    },
+    "blue_study_room_seat": {
+      "name": "自习室座位",
+      "body": "【场馆】启动：摸 1 张牌，获得 1 资源。"
+    },
+    "white_discipline_patrol": {
+      "name": "纪律巡查",
+      "body": "获得 1 防备。选择对手玩家，对其造成 1 点伤害。"
+    },
+    "green_recruiting_flyer": {
+      "name": "招新传单",
+      "body": "获得 1 资源，摸 1 张牌。"
+    },
+    "green_find_sponsorship": {
+      "name": "拉赞助",
+      "body": "获得 1 资源。然后从市场中免费获得一张费用不超过 3 的牌（进入弃牌堆）。"
+    },
+    "green_planning_meeting": {
+      "name": "策划会",
+      "body": "摸 1 张牌。然后从市场中免费获得一张费用不超过 2 的牌（置于牌库顶）。"
+    },
+    "neutral_convenience_snack": {
+      "name": "便利店点心",
+      "body": "获得 1 资源并回复 1 生命。"
+    },
+    "neutral_library_closing": {
+      "name": "图书馆闭馆",
+      "body": "摸 2 张牌。你在下回合开始时弃 1 张牌。"
+    },
+    "neutral_seat_swap": {
+      "name": "换座位",
+      "body": "摸 1 张牌，然后弃 1 张牌。获得 1 防备。"
+    },
+    "neutral_campus_broadcast": {
+      "name": "校园广播",
+      "body": "选择对手玩家，对其造成 2 点伤害。获得 1 资源。"
     }
   }
 }

@@ -61,6 +61,66 @@
     "red_cheer_combo": {
       "name": "Cheer Combo",
       "body": "Gain 1 attack. Choose an opponent venue and deal 2 durability damage to it."
+    },
+    "red_sprint_start": {
+      "name": "Sprint Start",
+      "body": "Gain 1 attack. Choose the opponent player and deal 1 damage."
+    },
+    "red_gym_booking": {
+      "name": "Gym Booking",
+      "body": "[Venue] Activate: Gain 2 attack."
+    },
+    "red_finals_day": {
+      "name": "Finals Day",
+      "body": "Gain 2 attack. Choose an opponent venue and deal 3 durability damage to it."
+    },
+    "blue_class_notes": {
+      "name": "Class Notes",
+      "body": "Draw 1 card. Gain 1 resource."
+    },
+    "blue_mock_exam": {
+      "name": "Mock Exam",
+      "body": "Scry 2 (non-interactive shuffle), then gain 1 resource."
+    },
+    "blue_mistake_book": {
+      "name": "Mistake Book",
+      "body": "Draw 2 cards, then discard 1 card."
+    },
+    "blue_study_room_seat": {
+      "name": "Study Room Seat",
+      "body": "[Venue] Activate: Draw 1 card. Gain 1 resource."
+    },
+    "white_discipline_patrol": {
+      "name": "Discipline Patrol",
+      "body": "Gain 1 block. Choose the opponent player and deal 1 damage."
+    },
+    "green_recruiting_flyer": {
+      "name": "Recruiting Flyer",
+      "body": "Gain 1 resource. Draw 1 card."
+    },
+    "green_find_sponsorship": {
+      "name": "Find Sponsorship",
+      "body": "Gain 1 resource. Then gain a market card costing up to 3 for free (put it in your discard)."
+    },
+    "green_planning_meeting": {
+      "name": "Planning Meeting",
+      "body": "Draw 1 card. Then gain a market card costing up to 2 for free (put it on top of your deck)."
+    },
+    "neutral_convenience_snack": {
+      "name": "Convenience Snack",
+      "body": "Gain 1 resource and heal 1 HP."
+    },
+    "neutral_library_closing": {
+      "name": "Library Closing",
+      "body": "Draw 2 cards. At the start of your next turn, discard 1 card."
+    },
+    "neutral_seat_swap": {
+      "name": "Seat Swap",
+      "body": "Draw 1 card, then discard 1 card. Gain 1 block."
+    },
+    "neutral_campus_broadcast": {
+      "name": "Campus Broadcast",
+      "body": "Choose the opponent player and deal 2 damage. Gain 1 resource."
     }
   }
 }
