@@ -19,6 +19,12 @@
 
 import * as fs from "fs";
 import * as path from "path";
+import {
+  assertCardRule,
+  assertCardText,
+  assertSetManifest as assertSetManifestSchema,
+  assertContentPack as assertContentPackSchema,
+} from "./validators";
 
 // ── 类型定义 ──────────────────────────────────────────────────────────────────
 
@@ -129,15 +135,27 @@ function readJson<T>(fullPath: string): T {
 /**
  * 加载 v2 规则数据文件（data/cards/rules/*.json）。
  * 返回 CardRuleData 数组，不含任何本地化文案。
+ * 每条 CardRule 均通过 AJV schema 校验，失败时抛出清晰报错。
  */
 export function loadCardRuleFile(dataRoot: string, relativePath: string): CardRuleData[] {
   const fullPath = path.join(dataRoot, relativePath);
-  return readJson<CardRuleData[]>(fullPath);
+  const raw = readJson<unknown[]>(fullPath);
+  raw.forEach((item, index) => {
+    try {
+      assertCardRule(item);
+    } catch (err) {
+      throw new Error(
+        `[${relativePath}][${index}] ${(err as Error).message}`
+      );
+    }
+  });
+  return raw as CardRuleData[];
 }
 
 /**
  * 加载文案文件（data/cards/text/<locale>/*.json）。
  * 文件不存在时返回 null（安全降级）。
+ * 文件存在时通过 AJV schema 校验，失败时抛出清晰报错。
  */
 export function loadCardTextFile(
   dataRoot: string,
@@ -145,26 +163,46 @@ export function loadCardTextFile(
 ): CardTextFile | null {
   const fullPath = path.join(dataRoot, relativePath);
   if (!fs.existsSync(fullPath)) return null;
-  return readJson<CardTextFile>(fullPath);
+  const raw = readJson<unknown>(fullPath);
+  try {
+    assertCardText(raw);
+  } catch (err) {
+    throw new Error(`[${relativePath}] ${(err as Error).message}`);
+  }
+  return raw as CardTextFile;
 }
 
 /**
  * 加载 Set 清单（data/sets/*.json）。
+ * 通过 AJV schema 校验，失败时抛出清晰报错。
  */
 export function loadSetManifest(dataRoot: string, relativePath: string): SetManifest {
   const fullPath = path.join(dataRoot, relativePath);
-  return readJson<SetManifest>(fullPath);
+  const raw = readJson<unknown>(fullPath);
+  try {
+    assertSetManifestSchema(raw);
+  } catch (err) {
+    throw new Error(`[${relativePath}] ${(err as Error).message}`);
+  }
+  return raw as SetManifest;
 }
 
 /**
  * 加载 ContentPack 清单（data/content-packs/*.json）。
+ * 通过 AJV schema 校验，失败时抛出清晰报错。
  */
 export function loadContentPackManifest(
   dataRoot: string,
   relativePath: string
 ): ContentPackManifest {
   const fullPath = path.join(dataRoot, relativePath);
-  return readJson<ContentPackManifest>(fullPath);
+  const raw = readJson<unknown>(fullPath);
+  try {
+    assertContentPackSchema(raw);
+  } catch (err) {
+    throw new Error(`[${relativePath}] ${(err as Error).message}`);
+  }
+  return raw as ContentPackManifest;
 }
 
 // ── 合并与降级 ─────────────────────────────────────────────────────────────────

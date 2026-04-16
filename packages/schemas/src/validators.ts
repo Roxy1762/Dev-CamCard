@@ -102,3 +102,27 @@ export function assertCardRule(data: unknown): void {
     throw new Error(`CardRule 校验失败:\n${result.errors.join("\n")}`);
   }
 }
+
+/** 校验 CardTextFile（本地化文案文件），失败则抛出详细错误 */
+export function assertCardText(data: unknown): void {
+  const result = checkCardText(data);
+  if (!result.valid) {
+    throw new Error(`CardText 校验失败:\n${result.errors.join("\n")}`);
+  }
+}
+
+/** 校验 SetManifest，失败则抛出详细错误 */
+export function assertSetManifest(data: unknown): void {
+  const result = checkSetManifest(data);
+  if (!result.valid) {
+    throw new Error(`SetManifest 校验失败:\n${result.errors.join("\n")}`);
+  }
+}
+
+/** 校验 ContentPackManifest，失败则抛出详细错误 */
+export function assertContentPack(data: unknown): void {
+  const result = checkContentPack(data);
+  if (!result.valid) {
+    throw new Error(`ContentPack 校验失败:\n${result.errors.join("\n")}`);
+  }
+}

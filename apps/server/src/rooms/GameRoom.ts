@@ -13,6 +13,7 @@ import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef } from "@
 import {
   loadRuleBatch,
   loadSetManifest,
+  assertRulesetDef,
   type CardRuleData,
 } from "@dev-camcard/schemas";
 
@@ -30,13 +31,15 @@ const allRules: CardRuleData[] = loadRuleBatch(DATA_ROOT, [
   "data/cards/rules/status.json",
 ]);
 
-// ruleset：从 data/rulesets/ 加载（仍使用旧格式，无变化）
+// ruleset：从 data/rulesets/ 加载，并通过 AJV 校验
 import * as fs from "fs";
 function loadJson<T>(relativePath: string): T {
   const fullPath = path.join(DATA_ROOT, relativePath);
   return JSON.parse(fs.readFileSync(fullPath, "utf-8")) as T;
 }
-const ruleset: RulesetConfig = loadJson("data/rulesets/core-v1.json");
+const rulesetRaw: unknown = loadJson("data/rulesets/core-v1.json");
+assertRulesetDef(rulesetRaw);
+const ruleset = rulesetRaw as RulesetConfig;
 
 // cardId → cost 查找表
 const costMap = new Map<string, number>();

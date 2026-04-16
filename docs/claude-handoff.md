@@ -2,46 +2,51 @@
 
 ## 当前完成状态（本轮）
 
-本轮完成了**数据层内容系统升级**和**客户端 ViewModel 层**的建立：规则数据与本地化文案彻底分层，服务端迁移至 v2 加载路径，客户端渲染层建立统一 ViewModel 入口。
+本轮完成了**内容系统运行时接入**：server 加载数据链全程受 AJV 保护，client 真正从 locale 文案读取卡牌名称，ViewModel 与内容系统形成闭环。
 
 ### 核心变更
 
-1. **服务端迁移至 v2 内容加载路径**（`apps/server/src/rooms/GameRoom.ts`）
-   - 从 `data/cards/rules/*.json` 加载规则（不含文案），替换旧 flat JSON
-   - 依赖 `@dev-camcard/schemas` 的 `loadRuleBatch` / `CardRuleData`
-   - `CardAbility.condition` 类型从 `string` 改为 `unknown`，与引擎的 `CardCondition` 结构兼容
-   - `server/tsconfig.json` 补充 `resolveJsonModule: true`（支持引用 schemas 包的 JSON 导入）
+1. **server AJV 运行时校验**（`packages/schemas/src/`）
+   - `validators.ts` 新增 `assertCardText` / `assertSetManifest` / `assertContentPack`
+   - `content-loader.ts` 在 `loadCardRuleFile` / `loadCardTextFile` / `loadSetManifest` / `loadContentPackManifest` 内部直接调用对应 `assert*`，校验失败抛出含路径信息的清晰报错
+   - `index.ts` 导出三个新 assert 函数
+   - `GameRoom.ts` 在加载 ruleset 时调用 `assertRulesetDef`，不再静默信任 JSON
 
-2. **集合清单更新**（`data/sets/core-v1.json`）
-   - 新增 `green_used_book_recycle`、`blue_draft_simulation` 两张卡（前轮新增但未加入清单）
+2. **client content-loader 集成**（`apps/game-client/src/content/clientLocale.ts`）
+   - 新模块，浏览器端最小 locale 加载层
+   - 静态导入四组文案文件（zh-CN / en-US），Vite 构建时打包
+   - `buildCardNames(locale)` → `Map<cardId, localizedName>`
+   - 支持 `SupportedLocale = "zh-CN" | "en-US"`，`DEFAULT_LOCALE = "zh-CN"`
+   - 代码结构支持后续无缝新增 locale
 
-3. **客户端 ViewModel 层**（`apps/game-client/src/viewmodel/BoardViewModel.ts`）
-   - `BoardViewModel` 接口 + `PlayerViewModel` 接口
-   - `buildBoardViewModel(pub, priv, cardNames?)` 纯函数：
-     - 推导 `mySide / oppSide / isMyTurn`
-     - 拍平 `hand / discard / pendingChoice`
-     - `getCardName()` 支持 locale 注入 + 安全降级（返回 cardId）
-   - RoomScene 所有 draw 方法消费 `vm`，不再直接散读原始视图
+3. **BootScene 接入 locale**（`apps/game-client/src/scenes/BootScene.ts`）
+   - `create()` 在连接前同步调用 `buildCardNames(DEFAULT_LOCALE)`
+   - `cardNames` Map 随 `view / privateView / roomClient` 一起传入 RoomScene
 
-4. **测试**（`apps/game-client/src/__tests__/viewmodel.test.ts`，13 个）
-   - game-client 新增 Vitest 配置
+4. **RoomScene 消费 cardNames**（`apps/game-client/src/scenes/RoomScene.ts`）
+   - `init()` 参数新增 `cardNames?`，赋值给已有 `this.cardNames`
+   - `rebuildUI()` 将 `this.cardNames` 传给 `buildBoardViewModel`，使 `getCardName()` 真正返回中文展示名
 
-5. **文档**
-   - 新建 `docs/asset-conventions.md`（artKey 命名规则、资源目录、正式卡图接入路径）
-   - 新建 `docs/client-viewmodel.md`（ViewModel 层设计、使用方式、扩展路径）
+5. **测试**
+   - `packages/schemas/src/__tests__/runtime-validation.test.ts`（11 个）：合法内容不抛错 × 5 + 非法内容清晰报错 × 6
+   - `apps/game-client/src/__tests__/locale.test.ts`（10 个）：locale 命中 × 5 + 缺失降级 × 2 + ViewModel 闭环 × 3
 
 ---
 
 ## 历史任务（已整合为背景）
 
-### 效果执行框架升级（上上轮）
+### 内容系统运行时接入（上轮）
+
+server 加载链全程 AJV 保护，client locale 闭环接入 ViewModel。
+
+### 数据层内容系统升级（上上轮）
+
+规则数据与本地化文案分层，v2 schema 体系，content-loader，locale fallback。
+
+### 效果执行框架升级（更早）
 
 统一 pending-choice 模型，trashFromHandOrDiscard，interactive scry，
 blue_draft_simulation / green_used_book_recycle 接通，client 选择 UI。
-
-### 数据层内容系统升级（上轮完成 schema / loader，本轮完成 server 迁移）
-
-规则数据与本地化文案分层，v2 schema 体系，content-loader，locale fallback。
 
 ### queueDelayedDiscard 白色控制链 / 商店主循环 / 预约位机制 / 效果系统初版
 
@@ -108,7 +113,6 @@ blue_draft_simulation / green_used_book_recycle 接通，client 选择 UI。
 - **完整 66 张市场牌**：当前 13 张
 - **gainFaceUpCard**：no-op 占位，需确定牌源
 - **scry 完整排序**：当前只能弃 0~1 张，无法自定义剩余顺序
-- **client cardNames 注入**：接口已预留，需在 BootScene/RoomScene 加载 locale 文案后填入
 
 ---
 
@@ -135,7 +139,7 @@ data/
     status.json
 
   sets/
-    core-v1.json     21 张卡牌 ID（含本轮新增 2 张）
+    core-v1.json     21 张卡牌 ID
   content-packs/
     base.json
   rulesets/
@@ -160,21 +164,22 @@ data/
 | engine | pendingChoice.test.ts | 24 |
 | schemas | validate.test.ts | 16 |
 | schemas | content-system.test.ts | 46 |
+| schemas | runtime-validation.test.ts | 11 |
 | game-client | viewmodel.test.ts | 13 |
-| **合计** | | **291** |
+| game-client | locale.test.ts | 10 |
+| **合计** | | **312** |
 
 ---
 
 ## 下一步推荐
 
-1. **client cardNames 注入**：在 `BootScene` 加载 locale 文案，构建 `Map<cardId, name>` 后传给 `buildBoardViewModel`，卡牌名称从 id 变为中文展示名
-2. **gainFaceUpCard 落地**：确定牌源（固定堆 / 弃牌堆 / cardId），实现 no-op → 真实效果
-3. **scry 完整排序**：`SubmitChoiceCmd` 加 `orderedInstanceIds`，`resolveScryChoice` 按序放回
-4. **chooseTarget（场馆选择）**：新增 `chooseTarget` pending 类型，扩展攻击分配 UI
-5. **断线重连**：Colyseus `allowReconnection` + 重连后重发私有视图
-6. **回放记录**：命令日志写入数据库
-7. **补全市场牌**：利用已支持 op 批量补充 red/blue/green/neutral 牌池（至少到 24 张）
-8. **AJV 运行时校验接入**：server 加载数据时调用 `assertCardRule` 验证数据文件
+1. **gainFaceUpCard 落地**：确定牌源（固定堆 / 弃牌堆 / cardId），实现 no-op → 真实效果
+2. **scry 完整排序**：`SubmitChoiceCmd` 加 `orderedInstanceIds`，`resolveScryChoice` 按序放回
+3. **chooseTarget（场馆选择）**：新增 `chooseTarget` pending 类型，扩展攻击分配 UI
+4. **断线重连**：Colyseus `allowReconnection` + 重连后重发私有视图
+5. **回放记录**：命令日志写入数据库
+6. **补全市场牌**：利用已支持 op 批量补充 red/blue/green/neutral 牌池（至少到 24 张）
+7. **locale 运行时切换 UI**：现在结构支持切换，可在 BootScene 或设置入口让玩家选择语言
 
 ## 测试命令
 
