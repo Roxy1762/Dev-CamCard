@@ -1,225 +1,63 @@
-# Claude 交接文档
+# Claude 交接文档（2026-04-16 校准版）
 
-> ⚠️ 归档说明：本文是阶段性交接记录，可能包含历史上下文。当前能力口径请以 `docs/current-capabilities.md` 为准。
+> 当前项目已从“概念验证”进入**可持续推进的技术原型**阶段。后续推进以规则正确性与可复现性优先。
 
+## 1. 当前基线与对齐原则
 
-## 当前完成状态（本轮）
+- 项目基线：以 `main` 分支代码语义为准。
+- 能力口径：与 `docs/current-capabilities.md` 保持一致。
+- 下一阶段执行：以 `docs/roadmap-next.md` 为主。
+- 已知问题清单：见 `docs/known-issues.md`。
 
-本轮完成了 **Prisma + PostgreSQL 最小持久化层接入（Task 3）**。
+## 2. 已完成能力（代码现状）
 
-### 核心变更（本轮）
+### 2.1 服务端与联机
+- `GameRoom` 已接入真实引擎 `reduce`，并做 Public/Private 双视图广播。
+- 支持 60 秒断线重连与事件日志回放入口（事件流拉取）。
+- 已接入 Prisma + PostgreSQL：对局元数据与命令事件可落库，含只读查询 API。
 
-#### Task 3：Prisma 持久化 + 只读 API
+### 2.2 规则引擎（MVP 主链）
+- READY / PLAY / ACTIVATE_VENUE / END_TURN / CONCEDE / SUBMIT_CHOICE 全链可跑。
+- 市场购买链路（公开购买 / 固定补给 / 预约购买）可用。
+- 攻击分配支持玩家与场馆目标，含 guard 优先限制。
+- 日程槽可结算 `onScheduleResolve`，场馆在回合开始重置启动次数并恢复耐久。
+- 选择型效果（如 chooseTarget、gainFaceUpCard、交互 scry、trashFromHandOrDiscard）已接通。
 
-1. **`apps/server/prisma/schema.prisma`（新建）**
-   - 三张表：`Match`、`MatchPlayer`、`MatchEvent`
-   - `Match`：roomId 为主键，rulesetVersion / contentSets / startedAt / endedAt / winner
-   - `MatchPlayer`：(matchId, side) 联合唯一约束
-   - `MatchEvent`：seq + BigInt ts + type + side + Json data，(matchId, seq) 联合索引
+### 2.3 客户端
+- RoomScene 可完成核心对局操作与 pending-choice 交互。
+- 对手场馆耐久当前可显示 `durability/maxDurability`。
 
-2. **`apps/server/prisma.config.ts`（新建）**
-   - Prisma 7 新配置格式（datasource.url 从 schema.prisma 移至此处）
-   - 读取 `.env` 文件中的 `DATABASE_URL`
+## 3. 当前优先级判断（已固化）
 
-3. **`apps/server/.env`（新建，本地开发用）**
-   - `DATABASE_URL=postgresql://devuser:devpass@localhost:5432/dev_camcard`
-   - 已添加 `.env.example`
+当前最优先事项**不是新增复杂机制**，而是先补齐规则正确性与可复现性主链：
 
-4. **`apps/server/src/prisma.ts`（新建）**
-   - 全局 Prisma 单例（`getPrisma()`）
-   - 使用 `@prisma/adapter-pg` + `pg.Pool`（Prisma 7 driver adapter 方式）
-   - `closePrisma()` 供进程退出时调用
+1. 日程槽合法性校验（规则与 UI 行为一致）
+2. 场馆真实耐久公开化（协议、投影、客户端显示一致）
+3. 攻击场馆 UI 与 guard 场景完整性
+4. 确定性 RNG / 可复现回放
+5. schema 收紧，避免 effect 字段与 engine 读取漂移
+6. 市场从 singleton 过渡到 rarity copies
+7. starter / fixed supplies / pressure 的结构性重做
+8. 以小包机制牌把“安排 / 预约 / 场馆 / 压力”做成玩法主轴
 
-5. **`apps/server/src/rooms/GameRoom.ts`（更新）**
-   - `onCreate` → `dbCreateMatch()`：写 Match 记录
-   - `onJoin` → `dbUpsertPlayer(side, name)`：写 MatchPlayer（upsert，支持重连）
-   - `recordCommandEvent` → `dbWriteEvent(evt)`：每条命令事件逐条落库
-   - 对局结束时 → `dbEndMatch(winner)`：写 endedAt + winner
-   - `onDispose` → 若尚未落库 MATCH_END 则补写
-   - 所有 DB 操作 fire-and-forget（不阻塞游戏逻辑，错误仅 log）
+> 以上已写入 `docs/roadmap-next.md` 与 `docs/known-issues.md`，作为后续实现顺序依据。
 
-6. **`apps/server/src/index.ts`（更新）**
-   - 新增三条只读 API：
-     - `GET /api/matches`：最近 50 场对局（含 players），按 startedAt 倒序
-     - `GET /api/matches/:id`：单场对局详情
-     - `GET /api/matches/:id/events`：该对局事件流（seq 升序，ts 为字符串避免 BigInt 序列化问题）
-   - 进程退出时调用 `closePrisma()`
+## 4. 仍待修问题（摘要）
 
-7. **`apps/server/src/__tests__/persistence.test.ts`（新建）**
-   - 7 条测试：Match 写入 / 读取、MatchEvent BigInt ts 落库、winner 更新、3 条 API 端点验证
+- 一致性层面：规则定义、协议视图、客户端可操作入口仍有局部错位风险。
+- 可复现层面：随机流程尚未形成统一 deterministic RNG 策略，回放可校验性不足。
+- 内容层面：市场供给与起始/固定补给/压力结构还不足以稳定支撑长期平衡。
 
-8. **数据库初始化（已执行）**
-   - PostgreSQL 实例：`localhost:5432`
-   - 数据库：`dev_camcard`，用户：`devuser` / `devpass`
-   - 迁移：`20260416115952_init_match_events` + `20260416120000_add_player_unique`
+## 5. 交接执行建议
 
----
+- 先按 `docs/known-issues.md` 的 P0 顺序修“规则正确性 + 可复现性”。
+- 每完成一个子项，同步更新：
+  1) `docs/current-capabilities.md`
+  2) `docs/known-issues.md`
+  3) 对应实现与测试
+- 暂缓新增复杂机制，避免在错误地基上叠特性。
 
-## 历史任务（已整合为背景）
+## 6. 本文档定位
 
-### 断线重连 + 事件日志骨架（上轮）
-
-`allowReconnection(client, 60)`，60 秒重连窗口，重连后自动重发状态 + 事件日志。
-内存事件流：`matchEvents: MatchEvent[]`，seq 单调递增，含 ts。
-`REQUEST_MATCH_EVENTS` 拉取接口；ReplayScene 列表展示。
-
-### chooseTarget + gainFaceUpCard（更早）
-
-`gainFaceUpCard` 从 no-op 变为真实效果，`chooseTarget` 最小框架，两张市场牌接通。
-
-### 内容系统运行时接入
-
-server 加载链全程 AJV 保护，client locale 闭环接入 ViewModel。
-
----
-
-## 已实现命令总表
-
-| 命令 | 状态 |
-|------|------|
-| READY | ✅ |
-| PLAY_CARD（行动牌） | ✅ |
-| PLAY_CARD（场馆牌→进场） | ✅ |
-| PLAY_CARD（压力牌→拒绝） | ✅ |
-| PUT_CARD_TO_SCHEDULE | ✅ |
-| ACTIVATE_VENUE | ✅ |
-| RESERVE_MARKET_CARD | ✅ |
-| BUY_RESERVED_CARD（折扣 -1） | ✅ |
-| BUY_MARKET_CARD（含补位） | ✅ |
-| BUY_FIXED_SUPPLY | ✅ |
-| ASSIGN_ATTACK（攻玩家） | ✅ |
-| ASSIGN_ATTACK（攻场馆） | ✅ |
-| ASSIGN_ATTACK（guard 限制） | ✅ |
-| END_TURN（含日程槽结算） | ✅ |
-| CONCEDE | ✅ |
-| SUBMIT_CHOICE | ✅ |
-
----
-
-## 数据库（本轮新增）
-
-```
-PostgreSQL localhost:5432
-  database: dev_camcard
-  user: devuser / devpass
-
-Tables:
-  Match           (id PK, rulesetVersion, contentSets[], startedAt, endedAt?, winner?)
-  MatchPlayer     (id, matchId FK, side, name) UNIQUE(matchId, side)
-  MatchEvent      (id, matchId FK, seq, ts BIGINT, type, side?, data JSON?)
-  _prisma_migrations
-```
-
----
-
-## 只读 API
-
-| 路由 | 说明 |
-|------|------|
-| `GET /api/matches` | 最近 50 场，含 players |
-| `GET /api/matches/:id` | 单场详情，含 players |
-| `GET /api/matches/:id/events` | 事件流，ts 为字符串 |
-
----
-
-## 测试覆盖
-
-| 包 | 文件 | 测试数 |
-|----|------|--------|
-| engine | reduce.test.ts | 47 |
-| engine | market.test.ts | 24 |
-| engine | turn.test.ts | 12 |
-| engine | deck.test.ts | 13 |
-| engine | engine.test.ts | 1 |
-| engine | reserve.test.ts | 17 |
-| engine | effects.test.ts | 25 |
-| engine | schema.test.ts | 34 |
-| engine | delayedDiscard.test.ts | 19 |
-| engine | pendingChoice.test.ts | 24 |
-| engine | gainFaceUpCard.test.ts | 14 |
-| schemas | validate.test.ts | 16 |
-| schemas | content-system.test.ts | 49 |
-| schemas | runtime-validation.test.ts | 11 |
-| game-client | viewmodel.test.ts | 13 |
-| game-client | locale.test.ts | 10 |
-| game-client | eventLog.test.ts | 8 |
-| **server** | **persistence.test.ts** | **7** |
-| **合计** | | **344** |
-
----
-
-## 断线重连行为说明
-
-- **超时**：60 秒（`RECONNECTION_TIMEOUT_SECS`）
-- **Token 存储**：`localStorage` key `devCamCard_reconnectionToken`
-- **恢复内容**：重连后服务端自动推送 `STATE_UPDATE` + `PRIVATE_UPDATE` + `MATCH_EVENTS`
-- **pendingChoice 恢复**：`PRIVATE_UPDATE` 中包含 `pendingChoice`，客户端重新进入选择 UI
-- **失败行为**：token 失效时清理 localStorage，fallback 到 `joinOrCreate` 新房间
-
-## 事件日志说明
-
-- **内存**：仍保留 `matchEvents: MatchEvent[]` 内存流，供实时推送
-- **持久化**：每条事件 fire-and-forget 写入 `MatchEvent` 表（Prisma）
-- 事件类型：`MATCH_START` / 所有 `CMD.*` / `MATCH_END`
-- 客户端可通过 `REQUEST_MATCH_EVENTS` 消息拉取完整流
-
----
-
-## 注意事项（next Claude）
-
-### Prisma 7 特殊点
-
-- Prisma 7 的 `schema.prisma` 不含 `url`，连接信息在 `prisma.config.ts`
-- 运行时使用 `@prisma/adapter-pg`，`new PrismaClient({ adapter })` 模式
-- `null` JSON 字段需传 `Prisma.JsonNull`（不是 JS `null`）
-- 迁移命令需先启动 PostgreSQL：`sudo service postgresql start`
-- 迁移命令（dev 环境）：`cd apps/server && npx prisma migrate dev --name <name>`
-- 应用迁移（非 interactive 环境）：`npx prisma migrate deploy`
-- 测试需 `DATABASE_URL` 环境变量（或 `.env` 文件）
-
-### DB 火力不足时的降级行为
-
-`dbCreateMatch` 等方法均 `.catch(err => console.error(...))` — DB 不可用时游戏房间不会崩溃，只是数据不落库。
-
-### GameRoom 注意
-
-- `applyStateEffects` 和 `resolveChoice` 需传入 `getCardCost`，否则 `gainFaceUpCard` 无候选
-- `chooseTarget` 提交玩家目标格式为字符串 `"player:0"` / `"player:1"`
-- `allowReconnection` 返回 `Deferred<Client>`，必须 `await`，超时时 `reject`
-- `Phaser.Scene` 已有 `events` 属性，自定义事件数组不可命名为 `events`（已用 `matchLog` / `recentEvents`）
-
----
-
-## 运行命令
-
-```bash
-# 启动 PostgreSQL（如未启动）
-sudo service postgresql start
-
-# 应用迁移（首次或新环境）
-cd apps/server && npx prisma migrate deploy
-
-# 开发服务器
-pnpm --filter @dev-camcard/server dev
-
-# 测试（需 DB 可用）
-DATABASE_URL="postgresql://devuser:devpass@localhost:5432/dev_camcard" pnpm --filter @dev-camcard/server test
-
-# 类型检查
-pnpm --filter @dev-camcard/server typecheck
-
-# 全量测试（engine + schemas + game-client）
-pnpm --filter @dev-camcard/engine test
-pnpm --filter @dev-camcard/schemas test
-pnpm --filter @dev-camcard/game-client test
-```
-
----
-
-## 下一步推荐
-
-1. **ReplayScene 完整播放器**：按 seq 逐步重建快照并渲染（持久化入口已就绪）
-2. **补全市场牌**：利用现有 op 批量补充到 20+ 张
-3. **dealDamage 防备联动**：block 抵消逻辑
-4. **scry 完整排序**：`SubmitChoiceCmd` 加 `orderedInstanceIds`
-5. **管理后台**：基于 `GET /api/matches` 的简单对局历史页（Next.js admin）
+本文仅做“阶段交接 + 优先级声明”，不再维护历史流水账。
+历史背景请查 Git 记录与旧提交说明。
