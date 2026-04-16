@@ -54,6 +54,9 @@ importers:
       vite:
         specifier: ^5.2.0
         version: 5.4.21(@types/node@20.19.39)
+      vitest:
+        specifier: ^1.6.0
+        version: 1.6.1(@types/node@20.19.39)
 
   apps/server:
     dependencies:
@@ -66,6 +69,9 @@ importers:
       '@dev-camcard/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
+      '@dev-camcard/schemas':
+        specifier: workspace:*
+        version: link:../../packages/schemas
       colyseus:
         specifier: ^0.15.17
         version: 0.15.57(@colyseus/schema@2.0.37)(express@4.22.1)
