@@ -66,6 +66,8 @@ type PendingChoice =
   | { type: "chooseCardsFromDiscard";       forSide; activeSide; minCount; maxCount; remainingEffects }
   | { type: "chooseCardsFromHandOrDiscard"; forSide; activeSide; minCount; maxCount; remainingEffects }
   | { type: "scryDecision";                 forSide; activeSide; revealedCards; deckBelow; maxDiscard; remainingEffects }
+  | { type: "gainFaceUpCardDecision";       forSide; activeSide; candidates: CardInstance[]; destination; remainingEffects }
+  | { type: "chooseTarget";                 forSide; activeSide; targetType; candidates: TargetCandidate[]; onChosen: TargetedEffect[]; remainingEffects }
 ```
 
 | 字段 | 说明 |
@@ -79,6 +81,10 @@ type PendingChoice =
 | `deckBelow` | scryDecision 专用：翻开牌下面的牌堆（原序保留） |
 
 **MVP 约定**：`forSide === activeSide`（当前版本所有 choice 效果均针对打牌方自己）。
+
+**gainFaceUpCardDecision**：候选 = 市场中费用 ≤ maxCost 的槽位牌。选 0 张跳过，选 1 张后从市场槽移除并补位，加入 destination 区域（discard / deckTop）。
+
+**chooseTarget**：候选由 targetType 决定（opponentPlayer / opponentVenue / selfVenue）。无候选时效果跳过。提交格式：玩家 `"player:N"`，场馆 `venueInstanceId`。解决时对选中目标应用 `onChosen: TargetedEffect[]`（damageVenue / dealDamage）。
 
 ---
 

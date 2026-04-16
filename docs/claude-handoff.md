@@ -2,42 +2,49 @@
 
 ## 当前完成状态（本轮）
 
-本轮完成了**内容系统运行时接入**：server 加载数据链全程受 AJV 保护，client 真正从 locale 文案读取卡牌名称，ViewModel 与内容系统形成闭环。
+本轮完成了 **chooseTarget 最小框架** 与 **gainFaceUpCard 正式落地**，两批被阻塞的市场牌开始可运行。
 
 ### 核心变更
 
-1. **server AJV 运行时校验**（`packages/schemas/src/`）
-   - `validators.ts` 新增 `assertCardText` / `assertSetManifest` / `assertContentPack`
-   - `content-loader.ts` 在 `loadCardRuleFile` / `loadCardTextFile` / `loadSetManifest` / `loadContentPackManifest` 内部直接调用对应 `assert*`，校验失败抛出含路径信息的清晰报错
-   - `index.ts` 导出三个新 assert 函数
-   - `GameRoom.ts` 在加载 ruleset 时调用 `assertRulesetDef`，不再静默信任 JSON
+1. **gainFaceUpCard 从 no-op 变为真实效果**（`packages/engine/src/effects.ts`）
+   - 效果类型改为 `{ op: "gainFaceUpCard"; maxCost: number; destination?: "discard" | "deckTop" }`
+   - 产生新 pending-choice 类型 `gainFaceUpCardDecision`，候选 = 市场中费用 ≤ maxCost 的槽位牌
+   - 解决时：从市场槽移除目标牌 + 自动补位 + 加入 discard 或 deckTop
+   - 若市场无满足候选，效果静默跳过（不产生 pending）
+   - `applyStateEffects` / `resolveChoice` 新增可选参数 `getCardCost?: GetCardCost`
+   - `reduce.ts` 中所有调用点透传 `config.getCardCost`
 
-2. **client content-loader 集成**（`apps/game-client/src/content/clientLocale.ts`）
-   - 新模块，浏览器端最小 locale 加载层
-   - 静态导入四组文案文件（zh-CN / en-US），Vite 构建时打包
-   - `buildCardNames(locale)` → `Map<cardId, localizedName>`
-   - 支持 `SupportedLocale = "zh-CN" | "en-US"`，`DEFAULT_LOCALE = "zh-CN"`
-   - 代码结构支持后续无缝新增 locale
+2. **chooseTarget 最小框架**（`packages/engine/src/effects.ts`）
+   - 新效果类型 `{ op: "chooseTarget"; targetType; onChosen: TargetedEffect[] }`
+   - `TargetedEffect` 支持 `damageVenue`（减场馆耐久，≤0 摧毁）和 `dealDamage`（直接扣 HP）
+   - `TargetCandidate` 区分 `kind: "player" | "venue"`
+   - 产生新 pending-choice 类型 `chooseTarget`，候选按 targetType 自动生成
+   - 提交格式：玩家 `"player:0"` / `"player:1"`，场馆 `venueInstanceId`
+   - 若无候选（如对手没有场馆），静默跳过
 
-3. **BootScene 接入 locale**（`apps/game-client/src/scenes/BootScene.ts`）
-   - `create()` 在连接前同步调用 `buildCardNames(DEFAULT_LOCALE)`
-   - `cardNames` Map 随 `view / privateView / roomClient` 一起传入 RoomScene
+3. **协议层更新**（`packages/protocol/src/views.ts`）
+   - `PendingChoiceView` 新增 `gainFaceUpCardDecision` 和 `chooseTarget` 两个变体
+   - 新增 `TargetCandidateView` 导出类型
 
-4. **RoomScene 消费 cardNames**（`apps/game-client/src/scenes/RoomScene.ts`）
-   - `init()` 参数新增 `cardNames?`，赋值给已有 `this.cardNames`
-   - `rebuildUI()` 将 `this.cardNames` 传给 `buildBoardViewModel`，使 `getCardName()` 真正返回中文展示名
+4. **投影层更新**（`packages/engine/src/projections.ts`）
+   - `toPendingChoiceView` 处理新两种 choice 类型
 
-5. **测试**
-   - `packages/schemas/src/__tests__/runtime-validation.test.ts`（11 个）：合法内容不抛错 × 5 + 非法内容清晰报错 × 6
-   - `apps/game-client/src/__tests__/locale.test.ts`（10 个）：locale 命中 × 5 + 缺失降级 × 2 + ViewModel 闭环 × 3
+5. **新卡牌接通**（`data/cards/rules/market-core.json`）
+   - `green_anniversary_sponsor`（cost=5，rare）：gainResource(1) + gainFaceUpCard(maxCost=4, discard)
+   - `red_cheer_combo`（cost=3，common）：gainAttack(1) + chooseTarget(opponentVenue, damageVenue 2)
+   - zh-CN / en-US 文案同步添加
+   - `core-v1.json` set 从 21 张扩展到 23 张
 
-### 本轮补充：内容系统一致性整理（低风险批量）
+6. **Schema 更新**（`packages/schemas/schemas/card-rule.schema.json`）
+   - op 白名单新增 `chooseTarget`
 
-- 已核对 starter / fixed-supplies / status / market-core 在 `zh-CN` 与 `en-US` 文案文件齐全，且与 rules 目录一一对应。
-- 明确将 `en-US` 作为“最小占位文案”基线：测试要求每个条目的 `name` / `body` 非空，防止后续新增卡牌漏填英文占位。
-- 将 `artKey` 风格约束固定为“默认等于 card id”，通过测试防止混入不一致命名。
-- 增加缺失 locale 的批量回退测试：`loadMergedBatch` 在 locale 文件不存在时，统一回退为 `name=id`、`body=""`。
-- 上述校验均落在 `packages/schemas/src/__tests__/content-system.test.ts`，用于保护运行时内容系统的一致性。
+7. **客户端 UI**（`apps/game-client/src/scenes/RoomScene.ts`）
+   - `drawChoicePanel` 新增 `gainFaceUpCardDecision` 分支：候选市场牌按钮，选 1 或跳过
+   - `drawChoicePanel` 新增 `chooseTarget` 分支：目标按钮（玩家/场馆），必须选 1 个确认
+   - `choiceTitleText` 补充两种新类型的标题文案
+
+8. **测试**（`packages/engine/src/__tests__/gainFaceUpCard.test.ts`）
+   - 新增 14 条聚焦测试，覆盖：候选筛选、跳过、进 discard/deckTop、市场补位、非法玩家提交、非法目标
 
 ---
 
@@ -47,11 +54,11 @@
 
 server 加载链全程 AJV 保护，client locale 闭环接入 ViewModel。
 
-### 数据层内容系统升级（上上轮）
+### 数据层内容系统升级
 
 规则数据与本地化文案分层，v2 schema 体系，content-loader，locale fallback。
 
-### 效果执行框架升级（更早）
+### 效果执行框架升级
 
 统一 pending-choice 模型，trashFromHandOrDiscard，interactive scry，
 blue_draft_simulation / green_used_book_recycle 接通，client 选择 UI。
@@ -97,30 +104,17 @@ blue_draft_simulation / green_used_book_recycle 接通，client 选择 UI。
 | scry（非交互） | self | — | ✅ MVP |
 | scry（interactive） | self | ✅ 玩家选择弃 0~1 张 | ✅ |
 | setFlag | self | — | ✅ |
-| gainFaceUpCard | — | — | ⚠️ no-op 占位 |
+| gainFaceUpCard | self | ✅ 玩家从市场候选中选牌 | ✅ |
 | queueDelayedDiscard | self / opponent | — | ✅ |
 | trashFromHandOrDiscard | self | ✅ 玩家选择目标 | ✅ |
+| chooseTarget | opponent/self | ✅ 玩家选择玩家或场馆 | ✅ |
 
-## 已支持 CardCondition 总表
+## 已支持 TargetedEffect（chooseTarget.onChosen）
 
-| condition.type | 说明 |
-|----------------|------|
-| firstActionThisTurn | 本回合第一张行动牌 |
-| actionsPlayedAtLeast | 本回合已打出至少 N 张行动牌 |
-| hasVenue | 己方至少有 1 座场馆 |
-| hasScheduledCard | 任意日程槽有牌 |
-| hasReservedCard | 预约位有牌 |
-
----
-
-## 还没完成的特色规则
-
-- **场馆 onPlay 效果**：进场时无效果（onActivate 已实现）
-- **断线重连**：Colyseus 层未配置 `allowReconnection`
-- **回放记录**：未实现
-- **完整 66 张市场牌**：当前 13 张
-- **gainFaceUpCard**：no-op 占位，需确定牌源
-- **scry 完整排序**：当前只能弃 0~1 张，无法自定义剩余顺序
+| op | 说明 |
+|----|------|
+| damageVenue | 减少场馆耐久；≤ 0 时摧毁 |
+| dealDamage | 直接扣玩家 HP（非战斗伤害） |
 
 ---
 
@@ -129,29 +123,12 @@ blue_draft_simulation / green_used_book_recycle 接通，client 选择 UI。
 ```
 data/
   cards/
-    # ── v2 内容系统（server 当前读取路径）──
     rules/
-      starter.json
-      fixed-supplies.json
-      market-core.json     13 种市场牌（含 used_book_recycle + draft_simulation）
-      status.json
-    text/zh-CN/
-      starter.json / fixed-supplies.json / market-core.json / status.json
-    text/en-US/
-      starter.json / fixed-supplies.json / market-core.json / status.json
-
-    # ── v1 legacy（归档，不再被 server 读取）──
-    starter.json
-    fixed-supplies.json
-    market-core.json
-    status.json
-
+      market-core.json     15 种市场牌（新增 anniversary_sponsor + cheer_combo）
+      starter.json / fixed-supplies.json / status.json
+    text/zh-CN/ + text/en-US/   （同步新增 2 张牌文案）
   sets/
-    core-v1.json     21 张卡牌 ID
-  content-packs/
-    base.json
-  rulesets/
-    core-v1.json
+    core-v1.json     23 张卡牌 ID（+2）
 ```
 
 ---
@@ -170,38 +147,39 @@ data/
 | engine | schema.test.ts | 34 |
 | engine | delayedDiscard.test.ts | 19 |
 | engine | pendingChoice.test.ts | 24 |
+| engine | **gainFaceUpCard.test.ts** | **14** |
 | schemas | validate.test.ts | 16 |
-| schemas | content-system.test.ts | 46 |
+| schemas | content-system.test.ts | 49 |
 | schemas | runtime-validation.test.ts | 11 |
 | game-client | viewmodel.test.ts | 13 |
 | game-client | locale.test.ts | 10 |
-| **合计** | | **312** |
+| **合计** | | **329** |
 
 ---
 
 ## 下一步推荐
 
-1. **gainFaceUpCard 落地**：确定牌源（固定堆 / 弃牌堆 / cardId），实现 no-op → 真实效果
-2. **scry 完整排序**：`SubmitChoiceCmd` 加 `orderedInstanceIds`，`resolveScryChoice` 按序放回
-3. **chooseTarget（场馆选择）**：新增 `chooseTarget` pending 类型，扩展攻击分配 UI
-4. **断线重连**：Colyseus `allowReconnection` + 重连后重发私有视图
-5. **回放记录**：命令日志写入数据库
-6. **补全市场牌**：利用已支持 op 批量补充 red/blue/green/neutral 牌池（至少到 24 张）
-7. **locale 运行时切换 UI**：现在结构支持切换，可在 BootScene 或设置入口让玩家选择语言
+1. **补全市场牌**：利用 gainFaceUpCard + chooseTarget 两个新 op，批量补充 red/blue/green/neutral 牌池（至少到 20 张）
+2. **selfVenue 配套牌**：chooseTarget(selfVenue) 框架已实现，加一张修复/强化己方场馆的卡
+3. **scry 完整排序**：`SubmitChoiceCmd` 加 `orderedInstanceIds`，`resolveScryChoice` 按序放回
+4. **dealDamage 防备联动**：当前 dealDamage 绕过防备；可在需要时加入 block 抵消逻辑
+5. **断线重连**：Colyseus `allowReconnection` + 重连后重发私有视图
+6. **回放记录**：命令日志写入数据库
+
+## 注意事项（next Claude）
+
+- `applyStateEffects` 和 `resolveChoice` 新增了可选参数 `getCardCost?: GetCardCost`。  
+  若不提供，`gainFaceUpCard` 效果无法筛选候选（视作无候选，静默跳过）。  
+  `reduce.ts` 中已全部透传 `config.getCardCost`，测试中需自行构造并传入。
+- `chooseTarget` 提交玩家目标时格式为字符串 `"player:0"` / `"player:1"`（不是数字）。
+- `gainFaceUpCard` 无候选时**不产生 pendingChoice**，效果直接跳过，不影响 remainingEffects。
 
 ## 测试命令
 
 ```bash
-# 全部测试
 pnpm --filter @dev-camcard/engine test
 pnpm --filter @dev-camcard/schemas test
 pnpm --filter @dev-camcard/game-client test
-
-# 构建检查
 pnpm --filter @dev-camcard/server typecheck
-pnpm --filter game-client build
-
-# 本地开发
-pnpm --filter @dev-camcard/server dev
-pnpm --filter game-client dev
+pnpm --filter game-client exec tsc --noEmit
 ```

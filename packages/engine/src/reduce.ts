@@ -54,7 +54,8 @@ export function reduce(
         command.selectedInstanceIds,
         random,
         config.ruleset.hp,
-        genId
+        genId,
+        config.getCardCost
       );
 
     // ── 以下所有命令在有 pendingChoice 时一律拒绝 ──────────────────────────────
@@ -216,7 +217,7 @@ function handlePlayCard(
     const players = clonePlayers(s);
     players[side] = updatedPlayer;
     s = { ...s, players };
-    s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId);
+    s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId, config.getCardCost);
     updatedPlayer = s.players[side];
 
     // 若本 ability 产生了 pendingChoice，停止处理后续 ability
@@ -308,7 +309,7 @@ function handleActivateVenue(
     const players = clonePlayers(s);
     players[side] = updatedPlayer;
     s = { ...s, players };
-    s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId);
+    s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId, config.getCardCost);
     updatedPlayer = s.players[side];
 
     if (s.pendingChoice) break;

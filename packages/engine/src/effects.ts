@@ -2,6 +2,9 @@ import type { PlayerSide } from "@dev-camcard/protocol";
 import type { CardInstance, InternalMatchState, InternalPlayerState } from "./types";
 import { draw, shuffle } from "./deck";
 
+/** 费用查询函数，用于 gainFaceUpCard 候选筛选 */
+export type GetCardCost = (cardId: string) => number;
+
 // ── Effect 类型定义 ────────────────────────────────────────────────────────────
 
 /**
@@ -31,8 +34,13 @@ export type CardEffect =
   | { op: "scry"; count: number; interactive?: boolean }
   /** 设置玩家标志位（用于条件效果，如 nextBoughtCardToDeckTop） */
   | { op: "setFlag"; flag: string }
-  /** 直接获取一张特定牌入手（MVP：no-op 占位，需确定来源） */
-  | { op: "gainFaceUpCard"; cardId: string }
+  /**
+   * 从公开市场获取一张费用 ≤ maxCost 的牌（玩家选择）。
+   *  destination = "discard"  → 进入弃牌堆（默认）
+   *  destination = "deckTop"  → 放到牌堆顶
+   * 若市场无满足条件的牌，效果跳过。
+   */
+  | { op: "gainFaceUpCard"; maxCost: number; destination?: "discard" | "deckTop" }
   /**
    * 让目标玩家在下回合开始时弃 count 张手牌。
    * 多次叠加累加到 pendingDiscardCount，beginTurn 时统一结算。
@@ -45,7 +53,37 @@ export type CardEffect =
    *  zone = "discard"：只能选弃牌堆
    *  zone = "either" （默认）：手牌与弃牌堆均可选
    */
-  | { op: "trashFromHandOrDiscard"; count: number; zone?: "hand" | "discard" | "either" };
+  | { op: "trashFromHandOrDiscard"; count: number; zone?: "hand" | "discard" | "either" }
+  /**
+   * 选择目标（对手玩家 / 对手场馆 / 己方场馆），然后对选中目标应用 onChosen 效果。
+   * 若当前无合法候选（如对手没有场馆），效果跳过。
+   */
+  | {
+      op: "chooseTarget";
+      targetType: "opponentPlayer" | "opponentVenue" | "selfVenue";
+      onChosen: TargetedEffect[];
+    };
+
+// ── 目标选择辅助类型 ──────────────────────────────────────────────────────────
+
+/**
+ * TargetedEffect — 应用于选中目标的效果（chooseTarget 专用）。
+ *  damageVenue  ：减少场馆耐久（≤0 时摧毁）
+ *  dealDamage   ：直接扣玩家 HP（非战斗伤害，不经过防备）
+ */
+export type TargetedEffect =
+  | { op: "damageVenue"; amount: number }
+  | { op: "dealDamage"; amount: number };
+
+/**
+ * TargetCandidate — 可供玩家选择的目标描述。
+ * 在 SUBMIT_CHOICE 中以 instanceId 提交：
+ *  - 玩家目标：提交 "player:0" 或 "player:1"
+ *  - 场馆目标：提交场馆 instanceId
+ */
+export type TargetCandidate =
+  | { kind: "player"; side: PlayerSide }
+  | { kind: "venue"; instanceId: string; cardId: string; ownerSide: PlayerSide };
 
 // ── PendingChoice 类型定义 ────────────────────────────────────────────────────
 
@@ -100,6 +138,27 @@ export type PendingChoice =
       deckBelow: CardInstance[];
       /** 本次最多可弃掉几张（当前 MVP = 1） */
       maxDiscard: number;
+      remainingEffects: CardEffect[];
+    }
+  | {
+      type: "gainFaceUpCardDecision";
+      forSide: PlayerSide;
+      activeSide: PlayerSide;
+      /** 市场中满足费用上限的候选牌（玩家选 1 张，或 0 张跳过） */
+      candidates: CardInstance[];
+      /** 获取后牌进入的区域 */
+      destination: "discard" | "deckTop";
+      remainingEffects: CardEffect[];
+    }
+  | {
+      type: "chooseTarget";
+      forSide: PlayerSide;
+      activeSide: PlayerSide;
+      targetType: "opponentPlayer" | "opponentVenue" | "selfVenue";
+      /** 当前可选的目标列表 */
+      candidates: TargetCandidate[];
+      /** 选中目标后对其应用的效果 */
+      onChosen: TargetedEffect[];
       remainingEffects: CardEffect[];
     };
 
@@ -281,7 +340,8 @@ export function applyStateEffects(
   effects: CardEffect[],
   random: () => number,
   maxHp: number,
-  genId: () => string
+  genId: () => string,
+  getCardCost?: GetCardCost
 ): InternalMatchState {
   let s = state;
 
@@ -291,7 +351,7 @@ export function applyStateEffects(
     // 遇到选择效果：先应用此前所有效果（已在循环中完成），然后挂起
     if (isChoiceEffect(effect)) {
       const remainingEffects = effects.slice(i + 1);
-      return createPendingChoiceForEffect(s, activeSide, effect, remainingEffects);
+      return createPendingChoiceForEffect(s, activeSide, effect, remainingEffects, getCardCost);
     }
 
     s = applySingleStateEffect(s, activeSide, effect, random, maxHp, genId);
@@ -316,7 +376,8 @@ export function resolveChoice(
   selectedIds: string[],
   random: () => number,
   maxHp: number,
-  genId: () => string
+  genId: () => string,
+  getCardCost?: GetCardCost
 ): InternalMatchState {
   const choice = state.pendingChoice;
   if (!choice) throw new Error("当前没有待处理的选择");
@@ -326,16 +387,22 @@ export function resolveChoice(
 
   switch (choice.type) {
     case "chooseCardsFromHand":
-      return resolveTrashChoiceFromHand(state, side, choice, selectedIds, random, maxHp, genId);
+      return resolveTrashChoiceFromHand(state, side, choice, selectedIds, random, maxHp, genId, getCardCost);
 
     case "chooseCardsFromDiscard":
-      return resolveTrashChoiceFromDiscard(state, side, choice, selectedIds, random, maxHp, genId);
+      return resolveTrashChoiceFromDiscard(state, side, choice, selectedIds, random, maxHp, genId, getCardCost);
 
     case "chooseCardsFromHandOrDiscard":
-      return resolveTrashChoiceFromHandOrDiscard(state, side, choice, selectedIds, random, maxHp, genId);
+      return resolveTrashChoiceFromHandOrDiscard(state, side, choice, selectedIds, random, maxHp, genId, getCardCost);
 
     case "scryDecision":
-      return resolveScryChoice(state, side, choice, selectedIds, random, maxHp, genId);
+      return resolveScryChoice(state, side, choice, selectedIds, random, maxHp, genId, getCardCost);
+
+    case "gainFaceUpCardDecision":
+      return resolveGainFaceUpCardChoice(state, side, choice, selectedIds, random, maxHp, genId, getCardCost);
+
+    case "chooseTarget":
+      return resolveChooseTargetChoice(state, side, choice, selectedIds, random, maxHp, genId, getCardCost);
   }
 }
 
@@ -348,7 +415,8 @@ function resolveTrashChoiceFromHand(
   selectedIds: string[],
   random: () => number,
   maxHp: number,
-  genId: () => string
+  genId: () => string,
+  getCardCost?: GetCardCost
 ): InternalMatchState {
   const player = state.players[side];
 
@@ -373,7 +441,7 @@ function resolveTrashChoiceFromHand(
   s = { ...s, pendingChoice: null };
 
   // 继续结算剩余效果
-  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId);
+  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId, getCardCost);
 }
 
 function resolveTrashChoiceFromDiscard(
@@ -383,7 +451,8 @@ function resolveTrashChoiceFromDiscard(
   selectedIds: string[],
   random: () => number,
   maxHp: number,
-  genId: () => string
+  genId: () => string,
+  getCardCost?: GetCardCost
 ): InternalMatchState {
   const player = state.players[side];
 
@@ -404,7 +473,7 @@ function resolveTrashChoiceFromDiscard(
   let s = mergePlayer(state, side, updatedPlayer);
   s = { ...s, pendingChoice: null };
 
-  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId);
+  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId, getCardCost);
 }
 
 function resolveTrashChoiceFromHandOrDiscard(
@@ -414,7 +483,8 @@ function resolveTrashChoiceFromHandOrDiscard(
   selectedIds: string[],
   random: () => number,
   maxHp: number,
-  genId: () => string
+  genId: () => string,
+  getCardCost?: GetCardCost
 ): InternalMatchState {
   const player = state.players[side];
   const totalAvailable = player.hand.length + player.discard.length;
@@ -440,7 +510,7 @@ function resolveTrashChoiceFromHandOrDiscard(
   let s = mergePlayer(state, side, updatedPlayer);
   s = { ...s, pendingChoice: null };
 
-  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId);
+  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId, getCardCost);
 }
 
 function resolveScryChoice(
@@ -450,7 +520,8 @@ function resolveScryChoice(
   selectedIds: string[],
   random: () => number,
   maxHp: number,
-  genId: () => string
+  genId: () => string,
+  getCardCost?: GetCardCost
 ): InternalMatchState {
   // selectedIds = 玩家选择【弃掉】的牌（来自 revealedCards）
   if (selectedIds.length > choice.maxDiscard) {
@@ -486,7 +557,163 @@ function resolveScryChoice(
   let s = mergePlayer(state, side, updatedPlayer);
   s = { ...s, pendingChoice: null };
 
-  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId);
+  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId, getCardCost);
+}
+
+// ── gainFaceUpCardDecision 解决 ───────────────────────────────────────────────
+
+function resolveGainFaceUpCardChoice(
+  state: InternalMatchState,
+  side: PlayerSide,
+  choice: Extract<PendingChoice, { type: "gainFaceUpCardDecision" }>,
+  selectedIds: string[],
+  random: () => number,
+  maxHp: number,
+  genId: () => string,
+  getCardCost?: GetCardCost
+): InternalMatchState {
+  // 可以选 0 张（跳过）或恰好 1 张
+  if (selectedIds.length > 1) {
+    throw new Error(`gainFaceUpCard 最多选 1 张，实际提交 ${selectedIds.length} 张`);
+  }
+
+  let s = { ...state, pendingChoice: null } as InternalMatchState;
+
+  if (selectedIds.length === 1) {
+    const chosenId = selectedIds[0];
+
+    // 验证所选牌在候选列表中
+    if (!choice.candidates.some((c) => c.instanceId === chosenId)) {
+      throw new Error(`实例 ${chosenId} 不在可选市场牌中`);
+    }
+
+    // 从市场槽中移除并补位
+    let gainedCard: CardInstance | null = null;
+    const market = s.market.map((lane) => {
+      const slotIdx = lane.slots.findIndex((sl) => sl?.instanceId === chosenId);
+      if (slotIdx === -1) return lane;
+
+      gainedCard = lane.slots[slotIdx]!;
+      const [refill, ...remainingDeck] = lane.deck;
+      const newSlots = lane.slots.map((sl, i) =>
+        i === slotIdx ? (refill ?? null) : sl
+      );
+      return { ...lane, slots: newSlots, deck: remainingDeck };
+    });
+
+    if (!gainedCard) {
+      throw new Error(`市场中未找到实例: ${chosenId}`);
+    }
+
+    s = { ...s, market };
+
+    // 加入玩家对应区域
+    const player = s.players[side];
+    const updatedPlayer: InternalPlayerState =
+      choice.destination === "deckTop"
+        ? { ...player, deck: [gainedCard, ...player.deck] }
+        : { ...player, discard: [...player.discard, gainedCard] };
+
+    s = mergePlayer(s, side, updatedPlayer);
+  }
+
+  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId, getCardCost);
+}
+
+// ── chooseTarget 解决 ─────────────────────────────────────────────────────────
+
+function resolveChooseTargetChoice(
+  state: InternalMatchState,
+  side: PlayerSide,
+  choice: Extract<PendingChoice, { type: "chooseTarget" }>,
+  selectedIds: string[],
+  random: () => number,
+  maxHp: number,
+  genId: () => string,
+  getCardCost?: GetCardCost
+): InternalMatchState {
+  if (selectedIds.length !== 1) {
+    throw new Error(`chooseTarget 需要恰好选 1 个目标，实际提交 ${selectedIds.length}`);
+  }
+
+  const selectedId = selectedIds[0];
+
+  // 验证目标在候选列表中
+  const candidate = choice.candidates.find((c) => {
+    if (c.kind === "player") return `player:${c.side}` === selectedId;
+    return c.instanceId === selectedId;
+  });
+  if (!candidate) {
+    throw new Error(`目标 ${selectedId} 不在合法候选列表中`);
+  }
+
+  let s = { ...state, pendingChoice: null } as InternalMatchState;
+
+  // 对目标应用效果
+  s = applyTargetedEffects(s, candidate, choice.onChosen, maxHp);
+
+  return applyStateEffects(s, choice.activeSide, choice.remainingEffects, random, maxHp, genId, getCardCost);
+}
+
+/** 将 TargetedEffect 列表应用到指定目标 */
+function applyTargetedEffects(
+  state: InternalMatchState,
+  target: TargetCandidate,
+  effects: TargetedEffect[],
+  maxHp: number
+): InternalMatchState {
+  let s = state;
+  for (const effect of effects) {
+    if (target.kind === "player") {
+      if (effect.op === "dealDamage") {
+        const player = s.players[target.side];
+        const updatedPlayer: InternalPlayerState = {
+          ...player,
+          hp: Math.max(0, player.hp - effect.amount),
+        };
+        s = mergePlayer(s, target.side, updatedPlayer);
+        // 检查胜负
+        if (updatedPlayer.hp === 0) {
+          const winner: PlayerSide = target.side === 0 ? 1 : 0;
+          s = { ...s, ended: true, winner };
+        }
+      }
+    } else {
+      // venue target
+      if (effect.op === "damageVenue") {
+        s = damageVenueInState(s, target.instanceId, effect.amount);
+      }
+    }
+  }
+  return s;
+}
+
+/** 减少场馆耐久；耐久 ≤ 0 时摧毁场馆 */
+function damageVenueInState(
+  state: InternalMatchState,
+  venueInstanceId: string,
+  amount: number
+): InternalMatchState {
+  for (let i = 0; i <= 1; i++) {
+    const playerSide = i as PlayerSide;
+    const player = state.players[playerSide];
+    const venueIdx = player.venues.findIndex((v) => v.instanceId === venueInstanceId);
+    if (venueIdx === -1) continue;
+
+    const venue = player.venues[venueIdx];
+    const newDurability = venue.durability - amount;
+
+    const updatedVenues =
+      newDurability <= 0
+        ? player.venues.filter((_, vi) => vi !== venueIdx)
+        : player.venues.map((v, vi) =>
+            vi === venueIdx ? { ...v, durability: newDurability } : v
+          );
+
+    const updatedPlayer: InternalPlayerState = { ...player, venues: updatedVenues };
+    return mergePlayer(state, playerSide, updatedPlayer);
+  }
+  throw new Error(`场馆实例未找到: ${venueInstanceId}`);
 }
 
 // ── 内部辅助 ──────────────────────────────────────────────────────────────────
@@ -495,6 +722,8 @@ function resolveScryChoice(
 function isChoiceEffect(effect: CardEffect): boolean {
   if (effect.op === "trashFromHandOrDiscard") return true;
   if (effect.op === "scry" && effect.interactive === true) return true;
+  if (effect.op === "gainFaceUpCard") return true;
+  if (effect.op === "chooseTarget") return true;
   return false;
 }
 
@@ -503,7 +732,8 @@ function createPendingChoiceForEffect(
   state: InternalMatchState,
   activeSide: PlayerSide,
   effect: CardEffect,
-  remainingEffects: CardEffect[]
+  remainingEffects: CardEffect[],
+  getCardCost?: GetCardCost
 ): InternalMatchState {
   if (effect.op === "trashFromHandOrDiscard") {
     const zone = effect.zone ?? "either";
@@ -546,6 +776,65 @@ function createPendingChoiceForEffect(
       remainingEffects,
     };
     return { ...s, pendingChoice };
+  }
+
+  if (effect.op === "gainFaceUpCard") {
+    const candidates: CardInstance[] = [];
+    if (getCardCost) {
+      for (const lane of state.market) {
+        for (const slot of lane.slots) {
+          if (slot && getCardCost(slot.cardId) <= effect.maxCost) {
+            candidates.push(slot);
+          }
+        }
+      }
+    }
+    // 无候选直接跳过
+    if (candidates.length === 0) {
+      return { ...state };
+    }
+    const pendingChoice: PendingChoice = {
+      type: "gainFaceUpCardDecision",
+      forSide: activeSide,
+      activeSide,
+      candidates,
+      destination: effect.destination ?? "discard",
+      remainingEffects,
+    };
+    return { ...state, pendingChoice };
+  }
+
+  if (effect.op === "chooseTarget") {
+    const oppSide: PlayerSide = activeSide === 0 ? 1 : 0;
+    const candidates: TargetCandidate[] = [];
+
+    if (effect.targetType === "opponentPlayer") {
+      candidates.push({ kind: "player", side: oppSide });
+    } else if (effect.targetType === "opponentVenue") {
+      for (const v of state.players[oppSide].venues) {
+        candidates.push({ kind: "venue", instanceId: v.instanceId, cardId: v.cardId, ownerSide: oppSide });
+      }
+    } else if (effect.targetType === "selfVenue") {
+      for (const v of state.players[activeSide].venues) {
+        candidates.push({ kind: "venue", instanceId: v.instanceId, cardId: v.cardId, ownerSide: activeSide });
+      }
+    }
+
+    // 无候选（如对手没有场馆）直接跳过
+    if (candidates.length === 0) {
+      return { ...state };
+    }
+
+    const pendingChoice: PendingChoice = {
+      type: "chooseTarget",
+      forSide: activeSide,
+      activeSide,
+      targetType: effect.targetType,
+      candidates,
+      onChosen: effect.onChosen,
+      remainingEffects,
+    };
+    return { ...state, pendingChoice };
   }
 
   // 不应到达这里
