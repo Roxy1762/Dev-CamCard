@@ -3,7 +3,7 @@ import { CMD } from "@dev-camcard/protocol";
 import type { CardInstance, InternalMatchState, InternalPlayerState, VenueState } from "./types";
 import type { RulesetConfig } from "./init";
 import type { CardDef } from "./effects";
-import { applyEffects, applyStateEffects, checkCondition } from "./effects";
+import { applyEffects, applyStateEffects, checkCondition, resolveChoice } from "./effects";
 import { draw, shuffle } from "./deck";
 import { endTurn } from "./turn";
 import { buyFromMarket, buyFixedSupply, reserveFromMarket, buyReservedCard } from "./market";
@@ -24,6 +24,8 @@ export interface EngineConfig {
  *
  * 接收当前内部状态 + 发令席位 + 客户端命令，返回新状态。
  * 非法操作抛出 Error（由调用方捕获后回复错误消息）。
+ *
+ * 当 state.pendingChoice 非 null 时，除 SUBMIT_CHOICE / CONCEDE 外所有命令均被拒绝。
  */
 export function reduce(
   state: InternalMatchState,
@@ -37,29 +39,54 @@ export function reduce(
     case CMD.READY:
       return handleReady(state, side, config.ruleset, random);
 
+    case CMD.CONCEDE:
+      return {
+        ...state,
+        ended: true,
+        winner: (side === 0 ? 1 : 0) as PlayerSide,
+      };
+
+    case CMD.SUBMIT_CHOICE:
+      assertStarted(state);
+      return resolveChoice(
+        state,
+        side,
+        command.selectedInstanceIds,
+        random,
+        config.ruleset.hp,
+        genId
+      );
+
+    // ── 以下所有命令在有 pendingChoice 时一律拒绝 ──────────────────────────────
+
     case CMD.PLAY_CARD:
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       return handlePlayCard(state, side, command.instanceId, config, random, genId);
 
     case CMD.PUT_CARD_TO_SCHEDULE:
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       return handlePutCardToSchedule(state, side, command.instanceId, command.slotIndex);
 
     case CMD.ACTIVATE_VENUE:
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       return handleActivateVenue(state, side, command.instanceId, config, random, genId);
 
     case CMD.RESERVE_MARKET_CARD:
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       return reserveFromMarket(state, side, command.instanceId, state.turnNumber);
 
     case CMD.BUY_RESERVED_CARD: {
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       const player = state.players[side];
       if (!player.reservedCard) {
         throw new Error("预约位为空，没有可购买的预约牌");
@@ -72,11 +99,13 @@ export function reduce(
     case CMD.ASSIGN_ATTACK:
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       return handleAssignAttack(state, side, command.assignments);
 
     case CMD.END_TURN:
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       return endTurn(state, config.ruleset.handSize, random, {
         hp: config.ruleset.hp,
         getCardDef: config.getCardDef,
@@ -86,6 +115,7 @@ export function reduce(
     case CMD.BUY_MARKET_CARD: {
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       const slot = state.market
         .flatMap((lane) => lane.slots)
         .find((s) => s?.instanceId === command.instanceId);
@@ -94,7 +124,6 @@ export function reduce(
       }
       const cost = config.getCardCost(slot.cardId);
       let newState = buyFromMarket(state, side, command.instanceId, cost);
-      // 处理 nextBoughtCardToDeckTop 标志
       newState = applyBuyFlag(newState, side);
       return newState;
     }
@@ -102,21 +131,14 @@ export function reduce(
     case CMD.BUY_FIXED_SUPPLY: {
       assertActive(state, side);
       assertStarted(state);
+      assertNoPendingChoice(state);
       const cost = config.getCardCost(command.cardId);
       let newState = buyFixedSupply(state, side, command.cardId, cost, genId);
       newState = applyBuyFlag(newState, side);
       return newState;
     }
 
-    case CMD.CONCEDE:
-      return {
-        ...state,
-        ended: true,
-        winner: (side === 0 ? 1 : 0) as PlayerSide,
-      };
-
     default:
-      // 未知命令 — no-op（防御性处理）
       return state;
   }
 }
@@ -145,14 +167,13 @@ function handlePlayCard(
     throw new Error(`未找到卡牌定义: ${card.cardId}`);
   }
 
-  // 压力牌不可打出
   if (cardDef.isPressure) {
     throw new Error(`压力牌不可打出: ${card.cardId}`);
   }
 
   const newHand = player.hand.filter((_, i) => i !== cardIdx);
 
-  // ── 场馆牌：进入场馆区，不走普通 played/discard 路径 ──────────────────────
+  // ── 场馆牌：进入场馆区 ─────────────────────────────────────────────────────
   if (cardDef.type === "venue") {
     const maxDur = cardDef.durability ?? 1;
     const venue: VenueState = {
@@ -162,7 +183,7 @@ function handlePlayCard(
       isGuard: cardDef.isGuard ?? false,
       durability: maxDur,
       maxDurability: maxDur,
-      activationsLeft: 0,                         // 进场当回合不能启动
+      activationsLeft: 0,
       activationsPerTurn: cardDef.activationsPerTurn ?? 1,
     };
 
@@ -177,7 +198,7 @@ function handlePlayCard(
     return { ...state, players };
   }
 
-  // ── 行动牌：移至 played 区，执行 onPlay 效果 ─────────────────────────────────
+  // ── 行动牌：移至 played 区，执行 onPlay 效果 ──────────────────────────────
   let updatedPlayer: InternalPlayerState = {
     ...player,
     hand: newHand,
@@ -188,21 +209,20 @@ function handlePlayCard(
   for (const ability of cardDef.abilities) {
     if (ability.trigger !== "onPlay") continue;
 
-    // 条件检查（用当前 updatedPlayer 状态）
     if (ability.condition && !checkCondition(updatedPlayer, ability.condition)) {
       continue;
     }
 
-    // 用 applyStateEffects 统一处理（支持 createPressure 等双方效果）
-    // 先把 updatedPlayer 写回 state 再传给 applyStateEffects
     const players = clonePlayers(s);
     players[side] = updatedPlayer;
     s = { ...s, players };
     s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId);
     updatedPlayer = s.players[side];
+
+    // 若本 ability 产生了 pendingChoice，停止处理后续 ability
+    if (s.pendingChoice) break;
   }
 
-  // 确保最终写回
   const finalPlayers = clonePlayers(s);
   finalPlayers[side] = updatedPlayer;
   return { ...s, players: finalPlayers };
@@ -269,7 +289,6 @@ function handleActivateVenue(
     throw new Error(`场馆本回合无法再次启动（activationsLeft=${venue.activationsLeft}）`);
   }
 
-  // 消耗一次启动次数
   const newVenues = player.venues.map((v, i) =>
     i === venueIdx ? { ...v, activationsLeft: v.activationsLeft - 1 } : v
   );
@@ -291,6 +310,8 @@ function handleActivateVenue(
     s = { ...s, players };
     s = applyStateEffects(s, side, ability.effects, random, config.ruleset.hp, genId);
     updatedPlayer = s.players[side];
+
+    if (s.pendingChoice) break;
   }
 
   const finalPlayers = clonePlayers(s);
@@ -307,7 +328,6 @@ function handleAssignAttack(
 ): InternalMatchState {
   if (assignments.length === 0) return state;
 
-  // ── 值守场馆限制检查 ────────────────────────────────────────────────────────
   const oppSide: PlayerSide = side === 0 ? 1 : 0;
   const oppPlayer = state.players[oppSide];
   const guardVenues = oppPlayer.venues.filter((v) => v.isGuard);
@@ -485,10 +505,6 @@ function startMatch(
 
 // ── nextBoughtCardToDeckTop 标志处理 ─────────────────────────────────────────
 
-/**
- * applyBuyFlag — 若玩家设有 nextBoughtCardToDeckTop 标志，
- * 将刚买入弃牌堆顶的牌移至牌堆顶，并清除标志。
- */
 function applyBuyFlag(
   state: InternalMatchState,
   side: PlayerSide
@@ -499,7 +515,6 @@ function applyBuyFlag(
   }
   if (player.discard.length === 0) return state;
 
-  // 弃牌堆最后一张就是刚买的牌
   const newDiscard = player.discard.slice(0, -1);
   const boughtCard = player.discard[player.discard.length - 1];
   const newDeck = [boughtCard, ...player.deck];
@@ -533,9 +548,23 @@ function assertStarted(state: InternalMatchState): void {
   }
 }
 
-/** 浅拷贝 players 元组（确保不直接修改原数组） */
+/**
+ * assertNoPendingChoice — 若存在待处理选择，拒绝执行当前命令。
+ * 仅 SUBMIT_CHOICE 和 CONCEDE 可在 pendingChoice 存在时执行。
+ */
+function assertNoPendingChoice(state: InternalMatchState): void {
+  if (state.pendingChoice) {
+    throw new Error(
+      "存在待处理的选择，请先发送 SUBMIT_CHOICE 命令响应后再执行其他操作"
+    );
+  }
+}
+
 function clonePlayers(
   state: InternalMatchState
 ): [InternalPlayerState, InternalPlayerState] {
   return [state.players[0], state.players[1]];
 }
+
+// 导出供测试使用
+export { clonePlayers };

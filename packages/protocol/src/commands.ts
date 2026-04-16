@@ -16,6 +16,12 @@ export const CMD = {
   ASSIGN_ATTACK: "ASSIGN_ATTACK",
   END_TURN: "END_TURN",
   CONCEDE: "CONCEDE",
+  /**
+   * 提交待处理选择的响应。
+   * 仅在 state.pendingChoice 非 null 时合法。
+   * 发送方必须是 pendingChoice.forSide 对应的玩家。
+   */
+  SUBMIT_CHOICE: "SUBMIT_CHOICE",
 } as const;
 
 export type CmdKey = (typeof CMD)[keyof typeof CMD];
@@ -86,6 +92,19 @@ export interface ConcedeCmd {
   type: typeof CMD.CONCEDE;
 }
 
+/**
+ * SubmitChoiceCmd — 提交待处理选择的响应。
+ *
+ * selectedInstanceIds：玩家选中的卡牌实例 ID 列表。
+ *  - 对于 chooseCardsFromHand/Discard/HandOrDiscard：选中的是要【报废】的牌
+ *  - 对于 scryDecision：选中的是要【弃掉】的牌（不选即按原序放回）
+ *  - 可以为空数组（表示可选数量为 0 的情况，如跳过弃牌）
+ */
+export interface SubmitChoiceCmd {
+  type: typeof CMD.SUBMIT_CHOICE;
+  selectedInstanceIds: string[];
+}
+
 /** 所有客户端命令的 discriminated union */
 export type ClientCommand =
   | ReadyCmd
@@ -98,4 +117,5 @@ export type ClientCommand =
   | BuyFixedSupplyCmd
   | AssignAttackCmd
   | EndTurnCmd
-  | ConcedeCmd;
+  | ConcedeCmd
+  | SubmitChoiceCmd;

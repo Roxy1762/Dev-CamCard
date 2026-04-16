@@ -45,6 +45,14 @@
     "neutral_finals_week": {
       "name": "Finals Week",
       "body": "Pressure strikes! Give opponent 2 Pressure. You also get 1 Pressure."
+    },
+    "green_used_book_recycle": {
+      "name": "Used Book Recycle",
+      "body": "Trash up to 1 card from your hand or discard. Gain 2 resources."
+    },
+    "blue_draft_simulation": {
+      "name": "Draft Simulation",
+      "body": "Scry 3: Look at the top 3 cards of your deck. You may discard 1. Put the rest back in order. Then gain 1 resource."
     }
   }
 }

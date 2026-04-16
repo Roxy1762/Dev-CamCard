@@ -1,4 +1,5 @@
 import type { PlayerSide, Lane } from "@dev-camcard/protocol";
+import type { PendingChoice } from "./effects";
 
 /**
  * 卡牌运行时实例 — 区分同一 cardId 的多张复印
@@ -98,4 +99,9 @@ export interface InternalMatchState {
   started: boolean;
   ended: boolean;
   winner: PlayerSide | null;
+  /**
+   * 当前等待某玩家响应的选择请求。
+   * 非 null 时对局暂停，仅接受来自 pendingChoice.forSide 的 SUBMIT_CHOICE 命令。
+   */
+  pendingChoice: PendingChoice | null;
 }

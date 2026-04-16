@@ -329,5 +329,45 @@
       }
     ],
     "artKey": "neutral_finals_week"
+  },
+  {
+    "id": "green_used_book_recycle",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": ["green", "club"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "trashFromHandOrDiscard", "count": 1, "zone": "either" },
+          { "op": "gainResource", "amount": 2 }
+        ]
+      }
+    ],
+    "artKey": "green_used_book_recycle"
+  },
+  {
+    "id": "blue_draft_simulation",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "course",
+    "type": "action",
+    "tags": ["blue", "study"],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          { "op": "scry", "count": 3, "interactive": true },
+          { "op": "gainResource", "amount": 1 }
+        ]
+      }
+    ],
+    "artKey": "blue_draft_simulation"
   }
 ]

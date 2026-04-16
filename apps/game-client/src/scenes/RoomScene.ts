@@ -1,5 +1,5 @@
 import Phaser from "phaser";
-import type { PublicMatchView, PrivatePlayerView, PublicCardRef } from "@dev-camcard/protocol";
+import type { PublicMatchView, PrivatePlayerView, PublicCardRef, PendingChoiceView } from "@dev-camcard/protocol";
 import { CMD } from "@dev-camcard/protocol";
 import type { RoomClient } from "../network/RoomClient";
 
@@ -56,6 +56,12 @@ export class RoomScene extends Phaser.Scene {
   /** 日程安排 pending 状态：点击手牌后进入"选槽"模式 */
   private schedulePendingCard: PublicCardRef | null = null;
 
+  /**
+   * 待提交选择：玩家在选择 UI 中已点击的实例 ID 集合。
+   * 空集合 = 尚未选择（允许提交空选择）。
+   */
+  private choiceSelected: Set<string> = new Set();
+
   constructor() {
     super({ key: "RoomScene" });
   }
@@ -89,6 +95,18 @@ export class RoomScene extends Phaser.Scene {
     for (const obj of this.uiObjects) obj.destroy();
     this.uiObjects = [];
     this.schedulePendingCard = null;
+
+    // 若没有待处理选择，清空已选状态（防止残留）
+    if (!this.privateView.pendingChoice) {
+      this.choiceSelected.clear();
+    }
+
+    // 若有待处理选择，优先渲染选择 UI（覆盖主界面）
+    if (this.privateView.pendingChoice) {
+      this.drawTopBar();
+      this.drawChoicePanel(this.privateView.pendingChoice);
+      return;
+    }
 
     this.drawTopBar();
     this.drawOpponentInfo();
@@ -376,6 +394,124 @@ export class RoomScene extends Phaser.Scene {
       "#444466",
       true
     );
+  }
+
+  // ── 待处理选择面板 ────────────────────────────────────────────────────────────
+
+  /**
+   * drawChoicePanel — 当 privateView.pendingChoice 非 null 时渲染选择界面。
+   *
+   * 设计原则：
+   *  - 覆盖主界面，避免误操作
+   *  - 候选牌以按钮形式列出，点击切换选中/未选中
+   *  - 提供"确认提交"按钮（发送 SUBMIT_CHOICE）
+   *  - 对于可选 0 张的情况，允许直接点击"跳过"
+   */
+  private drawChoicePanel(choice: PendingChoiceView): void {
+    const W = this.cameras.main.width;
+    const H = this.cameras.main.height;
+
+    // 半透明遮罩
+    const mask = this.add.graphics();
+    mask.fillStyle(0x000000, 0.75);
+    mask.fillRect(0, 30, W, H - 30);
+    this.uiObjects.push(mask);
+
+    let y = 50;
+
+    // 标题
+    const titleText = this.choiceTitleText(choice);
+    this.txt(W / 2, y, titleText, 14, "#ffff88", true);
+    y += 28;
+
+    const mySide = this.privateView.side;
+
+    // 候选牌列表
+    let candidates: PublicCardRef[] = [];
+    if (choice.type === "chooseCardsFromHand") {
+      candidates = this.privateView.hand;
+    } else if (choice.type === "chooseCardsFromDiscard") {
+      candidates = this.privateView.discard;
+    } else if (choice.type === "chooseCardsFromHandOrDiscard") {
+      // 手牌在上，弃牌堆在下，用分隔线区分
+      candidates = [...this.privateView.hand, ...this.privateView.discard];
+    } else if (choice.type === "scryDecision") {
+      candidates = choice.revealedCards;
+    }
+
+    // 渲染候选牌按钮
+    const CARD_W = 130;
+    const CARD_H = 60;
+    const startX = Math.max(10, (W - candidates.length * (CARD_W + 6)) / 2);
+
+    // 区域说明（HandOrDiscard）
+    if (choice.type === "chooseCardsFromHandOrDiscard" && this.privateView.hand.length > 0) {
+      this.txt(startX, y, "← 手牌", 10, "#aaaaff");
+      if (this.privateView.discard.length > 0) {
+        const discardStartX = startX + this.privateView.hand.length * (CARD_W + 6) + 4;
+        this.txt(discardStartX, y, "弃牌堆 →", 10, "#ffaaaa");
+      }
+      y += 14;
+    }
+    if (choice.type === "scryDecision") {
+      this.txt(W / 2, y, "（选择要弃掉的牌，最多 " + choice.maxDiscard + " 张；不选则全部放回）", 11, "#aaaaaa", true);
+      y += 16;
+    }
+
+    for (let i = 0; i < candidates.length; i++) {
+      const c = candidates[i];
+      const cx = startX + i * (CARD_W + 6);
+      const isSelected = this.choiceSelected.has(c.instanceId);
+      const bgColor = isSelected ? "#226622" : "#222244";
+      const borderLabel = isSelected ? "✓ " : "";
+
+      this.btn(cx, y, CARD_W, CARD_H, `${borderLabel}${c.id}`, 9, bgColor, isSelected ? "#aaffaa" : "#cccccc", () => {
+        if (this.choiceSelected.has(c.instanceId)) {
+          this.choiceSelected.delete(c.instanceId);
+        } else {
+          this.choiceSelected.add(c.instanceId);
+        }
+        this.rebuildUI();
+      });
+    }
+
+    if (candidates.length === 0) {
+      this.txt(W / 2, y + 20, "（无可选牌）", 12, "#666666", true);
+    }
+
+    y += CARD_H + 16;
+
+    // 选中数量提示
+    const selCount = this.choiceSelected.size;
+    const maxCount = choice.type === "scryDecision" ? choice.maxDiscard : (choice as { maxCount: number }).maxCount;
+    this.txt(W / 2, y, `已选: ${selCount} / 最多 ${maxCount} 张`, 11, "#aaaaaa", true);
+    y += 20;
+
+    // 提交按钮
+    const canSubmit = selCount <= maxCount;
+    if (canSubmit) {
+      const btnLabel = selCount === 0 ? "跳过（不选）" : `确认报废 / 弃掉 ${selCount} 张`;
+      this.btn(W / 2 - 100, y, 200, 36, btnLabel, 12, "#004422", "#aaffaa", () => {
+        this.roomClient.send({
+          type: CMD.SUBMIT_CHOICE,
+          selectedInstanceIds: Array.from(this.choiceSelected),
+        });
+        this.choiceSelected.clear();
+      });
+    }
+  }
+
+  private choiceTitleText(choice: PendingChoiceView): string {
+    switch (choice.type) {
+      case "chooseCardsFromHand":
+        return `请从手牌中选择最多 ${choice.maxCount} 张牌报废`;
+      case "chooseCardsFromDiscard":
+        return `请从弃牌堆中选择最多 ${choice.maxCount} 张牌报废`;
+      case "chooseCardsFromHandOrDiscard":
+        return `请从手牌或弃牌堆中选择最多 ${choice.maxCount} 张牌报废`;
+      case "scryDecision":
+        return `预习：查看牌堆顶 ${choice.revealedCards.length} 张，可弃掉其中 ${choice.maxDiscard} 张`;
+    }
   }
 
   // ── UI 辅助工厂 ───────────────────────────────────────────────────────────────
