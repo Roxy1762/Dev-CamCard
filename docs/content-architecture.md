@@ -52,7 +52,7 @@ data/
 │   │       └── market-core.json
 │   │
 │   # ── 旧格式（legacy，保持兼容） ──
-│   ├── starter.json            # v1 flat 格式，server 仍在读取
+│   ├── starter.json            # v1 flat 格式（历史兼容数据，不作为 server 默认读取源）
 │   ├── fixed-supplies.json
 │   ├── status.json
 │   └── market-core.json

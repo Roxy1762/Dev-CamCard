@@ -1,5 +1,8 @@
 # Claude 交接文档
 
+> ⚠️ 归档说明：本文是阶段性交接记录，可能包含历史上下文。当前能力口径请以 `docs/current-capabilities.md` 为准。
+
+
 ## 当前完成状态（本轮）
 
 本轮完成了 **Prisma + PostgreSQL 最小持久化层接入（Task 3）**。
