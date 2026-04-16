@@ -36,6 +36,14 @@ import {
 
 const REPO_ROOT = path.resolve(__dirname, "../../../../");
 const DATA_ROOT = REPO_ROOT;
+const CONTENT_FILES = [
+  "starter.json",
+  "fixed-supplies.json",
+  "status.json",
+  "market-core.json",
+] as const;
+const RULE_PATHS = CONTENT_FILES.map((f) => `data/cards/rules/${f}`);
+const EN_TEXT_PATHS = CONTENT_FILES.map((f) => `data/cards/text/en-US/${f}`);
 
 function loadJson(relPath: string): unknown {
   return JSON.parse(fs.readFileSync(path.join(REPO_ROOT, relPath), "utf-8"));
@@ -390,12 +398,7 @@ describe("card id 稳定性（card-catalog.md）", () => {
   });
 
   it("rules 目录 id 与 zh-CN 文案目录 id 完全匹配", () => {
-    const allRules = loadRuleBatch(DATA_ROOT, [
-      "data/cards/rules/starter.json",
-      "data/cards/rules/fixed-supplies.json",
-      "data/cards/rules/status.json",
-      "data/cards/rules/market-core.json",
-    ]);
+    const allRules = loadRuleBatch(DATA_ROOT, RULE_PATHS);
     const allText: Record<string, unknown> = {
       ...loadCardTextFile(DATA_ROOT, "data/cards/text/zh-CN/starter.json")!.cards,
       ...loadCardTextFile(DATA_ROOT, "data/cards/text/zh-CN/fixed-supplies.json")!.cards,
@@ -407,16 +410,48 @@ describe("card id 稳定性（card-catalog.md）", () => {
     }
   });
 
-  it("rules 目录所有卡牌均显式声明 artKey", () => {
-    const allRules = loadRuleBatch(DATA_ROOT, [
-      "data/cards/rules/starter.json",
-      "data/cards/rules/fixed-supplies.json",
-      "data/cards/rules/status.json",
-      "data/cards/rules/market-core.json",
-    ]);
+  it("rules 目录 id 与 en-US 文案目录 id 完全匹配（便于最小英文占位）", () => {
+    const allRules = loadRuleBatch(DATA_ROOT, RULE_PATHS);
+    const allText: Record<string, unknown> = {
+      ...loadCardTextFile(DATA_ROOT, "data/cards/text/en-US/starter.json")!.cards,
+      ...loadCardTextFile(DATA_ROOT, "data/cards/text/en-US/fixed-supplies.json")!.cards,
+      ...loadCardTextFile(DATA_ROOT, "data/cards/text/en-US/status.json")!.cards,
+      ...loadCardTextFile(DATA_ROOT, "data/cards/text/en-US/market-core.json")!.cards,
+    };
+    for (const rule of allRules) {
+      expect(allText[rule.id], `规则 id "${rule.id}" 缺少 en-US 文案`).toBeDefined();
+    }
+  });
+
+  it("en-US 文案 name/body 不为空（最小英文占位可用）", () => {
+    for (const relPath of EN_TEXT_PATHS) {
+      const tf = loadCardTextFile(DATA_ROOT, relPath)!;
+      for (const [id, text] of Object.entries(tf.cards)) {
+        expect(text.name.trim().length, `${relPath} -> ${id} name 不能为空`).toBeGreaterThan(0);
+        expect(text.body.trim().length, `${relPath} -> ${id} body 不能为空`).toBeGreaterThan(0);
+      }
+    }
+  });
+
+  it("rules 目录所有卡牌均显式声明 artKey，且默认与 id 一致", () => {
+    const allRules = loadRuleBatch(DATA_ROOT, RULE_PATHS);
     for (const rule of allRules) {
       expect(typeof rule.artKey).toBe("string");
       expect(rule.artKey!.length).toBeGreaterThan(0);
+      expect(rule.artKey).toBe(rule.id);
+    }
+  });
+
+  it("loadMergedBatch 缺失 locale 文件时回退到 id / 空 body", () => {
+    const missingLocaleBatches = CONTENT_FILES.map((f) => ({
+      rules: `data/cards/rules/${f}`,
+      text: `data/cards/text/xx-XX/${f}`,
+    }));
+    const merged = loadMergedBatch(DATA_ROOT, missingLocaleBatches);
+    expect(merged.length).toBeGreaterThan(0);
+    for (const card of merged) {
+      expect(card.name).toBe(card.id);
+      expect(card.text.body).toBe("");
     }
   });
 });

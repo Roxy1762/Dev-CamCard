@@ -31,6 +31,14 @@
    - `packages/schemas/src/__tests__/runtime-validation.test.ts`（11 个）：合法内容不抛错 × 5 + 非法内容清晰报错 × 6
    - `apps/game-client/src/__tests__/locale.test.ts`（10 个）：locale 命中 × 5 + 缺失降级 × 2 + ViewModel 闭环 × 3
 
+### 本轮补充：内容系统一致性整理（低风险批量）
+
+- 已核对 starter / fixed-supplies / status / market-core 在 `zh-CN` 与 `en-US` 文案文件齐全，且与 rules 目录一一对应。
+- 明确将 `en-US` 作为“最小占位文案”基线：测试要求每个条目的 `name` / `body` 非空，防止后续新增卡牌漏填英文占位。
+- 将 `artKey` 风格约束固定为“默认等于 card id”，通过测试防止混入不一致命名。
+- 增加缺失 locale 的批量回退测试：`loadMergedBatch` 在 locale 文件不存在时，统一回退为 `name=id`、`body=""`。
+- 上述校验均落在 `packages/schemas/src/__tests__/content-system.test.ts`，用于保护运行时内容系统的一致性。
+
 ---
 
 ## 历史任务（已整合为背景）
