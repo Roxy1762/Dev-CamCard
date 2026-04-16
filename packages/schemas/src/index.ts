@@ -39,6 +39,9 @@ export {
   checkSetManifest,
   checkContentPack,
   assertCardRule,
+  assertCardText,
+  assertSetManifest,
+  assertContentPack,
 } from "./validators";
 
 export type { ValidationResult } from "./validators";

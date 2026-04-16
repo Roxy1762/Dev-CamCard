@@ -70,10 +70,11 @@ export class RoomScene extends Phaser.Scene {
     super({ key: "RoomScene" });
   }
 
-  init(data: { view: PublicMatchView; privateView: PrivatePlayerView; roomClient: RoomClient }): void {
+  init(data: { view: PublicMatchView; privateView: PrivatePlayerView; roomClient: RoomClient; cardNames?: ReadonlyMap<string, string> }): void {
     this.view = data.view;
     this.privateView = data.privateView;
     this.roomClient = data.roomClient;
+    this.cardNames = data.cardNames;
   }
 
   create(): void {

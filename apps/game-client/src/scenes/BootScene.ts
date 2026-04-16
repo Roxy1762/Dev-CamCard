@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import { RoomClient } from "../network/RoomClient";
 import type { PublicMatchView, PrivatePlayerView } from "@dev-camcard/protocol";
 import { preloadRuntimePlaceholders } from "../assets/runtimeAssets";
+import { buildCardNames, DEFAULT_LOCALE } from "../content/clientLocale";
 
 /**
  * BootScene — 启动 + 连接场景
@@ -43,6 +44,9 @@ export class BootScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    // 构建 locale 文案 Map（早于网络请求，纯同步）
+    const cardNames = buildCardNames(DEFAULT_LOCALE);
+
     // 等待 state_update + private_update 均到达后再切换场景
     const roomClient = new RoomClient();
     let firstView: PublicMatchView | null = null;
@@ -56,6 +60,7 @@ export class BootScene extends Phaser.Scene {
         view: firstView,
         privateView: firstPrivate,
         roomClient,
+        cardNames,
       });
     };
 

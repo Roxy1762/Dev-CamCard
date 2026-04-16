@@ -170,27 +170,43 @@ const rules = loadRuleBatch(DATA_ROOT, [
   "data/cards/rules/status.json",
 ]);
 // rules: CardRuleData[] — 不含 name/text，engine 直接消费
+// 每条 CardRule 均经过 AJV assertCardRule 校验；失败时立即抛出含路径信息的报错
 ```
 
-### Client（需要本地化文案）
+**AJV 校验覆盖（server 加载时）：**
+
+| 加载函数 | 使用的 assert | 校验目标 |
+|---------|-------------|---------|
+| `loadCardRuleFile` | `assertCardRule` (逐条) | v2 卡牌规则 |
+| `loadCardTextFile` | `assertCardText` | 本地化文案文件 |
+| `loadSetManifest` | `assertSetManifest` | 集合清单 |
+| `loadContentPackManifest` | `assertContentPack` | 内容包清单 |
+| `GameRoom.ts` (直接) | `assertRulesetDef` | 规则集 |
+
+校验失败时抛出格式为：`[文件路径][条目索引] 具体错误` 的清晰报错，不静默吞掉。
+
+### Client（需要本地化文案，浏览器端）
 
 ```typescript
-import { loadMergedBatch } from "@dev-camcard/schemas";
+// apps/game-client/src/content/clientLocale.ts
+import { buildCardNames } from "../content/clientLocale";
 
-const cards = loadMergedBatch(DATA_ROOT, [
-  { rules: "data/cards/rules/starter.json", text: `data/cards/text/${locale}/starter.json` },
-  // ...
-]);
-// cards: MergedCardDef[] — 含 name + text，供展示层使用
+// BootScene.create() 中调用（同步，Vite 构建时已打包文案）
+const cardNames = buildCardNames("zh-CN"); // Map<cardId, "中文名称">
+
+// 传入 RoomScene，再传给 buildBoardViewModel
+const vm = buildBoardViewModel(pub, priv, cardNames);
+vm.getCardName("starter_allowance"); // → "零花钱"
 ```
+
+客户端不依赖 Node.js `fs`；`clientLocale.ts` 静态导入 JSON，Vite 构建时打包进 bundle。
 
 ### Locale 安全降级
 
-locale 文件缺失或对应 id 无文案时，`mergeCardDef` 自动降级：
-- `name` → 卡牌 id
-- `text.body` → 空字符串
+- **server 侧**（content-loader）：locale 文件缺失时 `loadCardTextFile` 返回 null；`mergeCardDef` 自动将 name 降级为 id，body 降级为 ""。
+- **client 侧**（clientLocale）：缺失 cardId 时 `buildCardNames` 的 Map 不含该 key；`getCardName(cardId)` 降级返回 cardId 自身。
 
-不会抛出错误，引擎不受影响。
+均不抛出错误，引擎不受影响。
 
 ---
 

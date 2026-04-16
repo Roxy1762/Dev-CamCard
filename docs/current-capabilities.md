@@ -79,7 +79,8 @@
 - [x] 命令分发（onMessage "*"）
 - [x] 状态广播（PublicMatchView + PrivatePlayerView）
 - [x] SUBMIT_CHOICE 自动通过 reduce → resolveChoice 处理
-- [x] **v2 内容加载**：GameRoom.ts 改从 `data/cards/rules/*.json` 加载，不再依赖旧 flat JSON
+- [x] **v2 内容加载**：GameRoom.ts 从 `data/cards/rules/*.json` 加载
+- [x] **AJV 运行时校验**：card rule / card text / set / content-pack / ruleset 全程受 schema 保护，加载失败时抛出含路径信息的清晰报错
 
 ### 客户端（game-client）
 
@@ -92,6 +93,13 @@
   - RoomScene 所有 draw 方法消费 `vm`，不再直接散读原始视图
   - `getCardName()` 支持 locale 注入 + 安全降级（返回 cardId）
   - `mySide / oppSide / isMyTurn` 集中推导
+- [x] **client content-loader 集成**：
+  - `src/content/clientLocale.ts`：浏览器端最小 locale 加载层
+  - `buildCardNames(locale)` 静态导入文案 JSON，返回 `Map<cardId, localizedName>`
+  - `SupportedLocale = "zh-CN" | "en-US"`，`DEFAULT_LOCALE = "zh-CN"`
+  - `BootScene.create()` 构建 `cardNames` 并传入 RoomScene
+  - `RoomScene.init()` 接收 `cardNames`，传给 `buildBoardViewModel`
+  - **ViewModel 与内容系统闭环**：`getCardName("starter_allowance")` → `"零花钱"`
 
 ### 数据层（内容系统）
 
@@ -104,6 +112,7 @@
   - `data/content-packs/base.json`：内容包清单
 - [x] JSON Schema 体系（card-rule / card-text / set / content-pack / ruleset / mod-manifest）
 - [x] `packages/schemas` content-loader：`loadRuleBatch / loadMergedBatch / mergeCardDef / getCardText`
+- [x] **AJV 运行时校验内置于 content-loader**：所有 load* 函数调用对应 assert*，失败立即抛出
 - [x] locale 安全降级（name → cardId，body → ""）
 - [x] artKey 统一命名（默认 = card id，详见 docs/asset-conventions.md）
 
@@ -129,11 +138,10 @@
 - [ ] 断线重连（Colyseus `allowReconnection` 未配置）
 - [ ] 回放记录（命令日志未持久化）
 - [ ] 数据库（PostgreSQL + Prisma 未初始化）
-- [ ] AJV 运行时校验：schemas 包已有全套校验器，但 server 加载时未接入运行时校验
-- [ ] client content-loader 集成：cardNames 注入 ViewModel（接口已预留，数据层已就绪）
 
 ### 客户端体验
 
+- [ ] locale 运行时切换 UI（代码结构已支持，需在 BootScene 或设置界面暴露）
 - [ ] 攻击分配 UI 细化（当前为"全力攻击对手"简化方案）
 - [ ] 延迟弃牌视觉提示（pendingDiscardCount 已广播）
 - [ ] 弃牌堆视图（PublicMatchView 中只暴露 discardSize）
@@ -166,13 +174,15 @@
 |------|--------|
 | validate.test.ts | 16 |
 | content-system.test.ts | 46 |
-| **小计** | **62** |
+| runtime-validation.test.ts | 11 |
+| **小计** | **73** |
 
 ### game-client 包
 
 | 文件 | 测试数 |
 |------|--------|
 | viewmodel.test.ts | 13 |
-| **小计** | **13** |
+| locale.test.ts | 10 |
+| **小计** | **23** |
 
-**总计：291 个测试（engine 216 + schemas 62 + game-client 13）**
+**总计：312 个测试（engine 216 + schemas 73 + game-client 23）**
