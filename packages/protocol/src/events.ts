@@ -62,6 +62,12 @@ export interface MatchSnapshot {
   /** 参与本对局的内容集合列表（仅文件名，不含路径） */
   contentSets: string[];
   startedAt: number;
+  /**
+   * 对局初始 RNG seed（32-bit 无符号）。
+   * 同 seed + 同命令流可重建对局关键状态，是回放可复现的基础信号。
+   * 历史对局可能缺失此字段（兼容旧日志）。
+   */
+  initialSeed?: number;
 }
 
 /**

@@ -95,7 +95,7 @@ const CARD_DEFS: Record<string, CardDef> = {
   test_draw_then_discard: {
     id: "test_draw_then_discard",
     type: "action",
-    abilities: [{ trigger: "onPlay", effects: [{ op: "drawThenDiscard", count: 1 }] }],
+    abilities: [{ trigger: "onPlay", effects: [{ op: "drawThenDiscard", drawCount: 1, discardCount: 1 }] }],
   },
   test_schedule_combo: {
     id: "test_schedule_combo",

@@ -104,4 +104,21 @@ export interface InternalMatchState {
    * 非 null 时对局暂停，仅接受来自 pendingChoice.forSide 的 SUBMIT_CHOICE 命令。
    */
   pendingChoice: PendingChoice | null;
+  /**
+   * 对局初始 seed（Mulberry32 32-bit 无符号）。
+   * 由创建方（server）在 createMatchState 时写入，不再变化。
+   * 用于 snapshot 与后续回放重建。
+   */
+  initialSeed?: number;
+  /**
+   * 当前 RNG 状态（Mulberry32 32-bit 无符号）。
+   * reduce/beginTurn/endTurn 每次调用会随 random 推进而更新。
+   * 持久化此字段即可从任意事件之后原地续跑。
+   */
+  rngState?: number;
+  /**
+   * 实例 ID 计数器：可复现地生成 `${roomId}-${n}` 形式的 instanceId。
+   * 凡未显式注入 genId 的引擎调用都会基于此计数器推进。
+   */
+  idCounter?: number;
 }

@@ -21,6 +21,7 @@
 export const ENGINE_VERSION = "0.1.0";
 
 export * from "./types";
+export * from "./rng";
 export * from "./deck";
 export * from "./turn";
 export * from "./market";
