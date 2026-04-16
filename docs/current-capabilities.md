@@ -31,7 +31,7 @@
 - [x] 延迟弃牌（queueDelayedDiscard / pendingDiscardCount / beginTurn 结算）
 - [x] 结束回合（END_TURN）
 - [x] 投降（CONCEDE）
-- [x] **SUBMIT_CHOICE（本轮新增）**：响应待处理选择
+- [x] SUBMIT_CHOICE：响应待处理选择
 
 ### Effect 系统（engine/effects.ts）
 
@@ -47,11 +47,11 @@
 | drawThenDiscard | self | 摸牌后弃牌 |
 | createPressure | self / opponent | 产生压力牌 |
 | scry（非交互） | self | 预习：随机重洗牌堆顶 N 张（MVP）|
-| **scry（interactive=true）** | **self** | **预习：玩家选择弃 0~1 张，余下原序放回（本轮）** |
+| scry（interactive=true） | self | 预习：玩家选择弃 0~1 张，余下原序放回 |
 | setFlag | self | 设置标志位 |
 | gainFaceUpCard | — | ⚠️ no-op 占位 |
 | queueDelayedDiscard | self / opponent | 让目标下回合弃 N 张 |
-| **trashFromHandOrDiscard** | **self** | **从手牌/弃牌堆报废 N 张（本轮）** |
+| trashFromHandOrDiscard | self | 从手牌/弃牌堆报废 N 张（玩家选择目标） |
 
 已支持的 `CardCondition` type：
 
@@ -63,7 +63,7 @@
 | hasScheduledCard | 任意日程槽有牌 |
 | hasReservedCard | 预约位有牌 |
 
-### Pending-Choice 状态机（本轮新增）
+### Pending-Choice 状态机
 
 - [x] `PendingChoice` 统一类型（4 种：chooseFromHand / Discard / HandOrDiscard / scryDecision）
 - [x] `InternalMatchState.pendingChoice` 字段
@@ -79,24 +79,33 @@
 - [x] 命令分发（onMessage "*"）
 - [x] 状态广播（PublicMatchView + PrivatePlayerView）
 - [x] SUBMIT_CHOICE 自动通过 reduce → resolveChoice 处理
+- [x] **v2 内容加载**：GameRoom.ts 改从 `data/cards/rules/*.json` 加载，不再依赖旧 flat JSON
 
 ### 客户端（game-client）
 
 - [x] Phaser 场景：BootScene + RoomScene
 - [x] 基础交互：READY / 打牌 / 买牌 / 攻击 / 结束回合 / 场馆 / 日程槽
 - [x] 预约位 UI
-- [x] **选择 UI（本轮新增）**：
-  - 有 pendingChoice 时显示遮罩 + 候选牌按钮
-  - 支持 chooseFromHand / Discard / HandOrDiscard / scryDecision
-  - 点击候选牌切换选中状态（绿色高亮）
-  - 确认提交 / 跳过（空选择）按钮
+- [x] 选择 UI：有 pendingChoice 时显示遮罩 + 候选牌按钮 + 确认提交
+- [x] **ViewModel 层**：
+  - `BoardViewModel` 类型 + `buildBoardViewModel` 构建函数
+  - RoomScene 所有 draw 方法消费 `vm`，不再直接散读原始视图
+  - `getCardName()` 支持 locale 注入 + 安全降级（返回 cardId）
+  - `mySide / oppSide / isMyTurn` 集中推导
 
-### 数据层
+### 数据层（内容系统）
 
-- [x] v1 legacy 格式（server 当前读取，保持兼容）：
-  - market-core.json：**13 张**（本轮新增 green_used_book_recycle + blue_draft_simulation）
-- [x] v2 内容系统（rules/ + text/zh-CN/ + text/en-US/，同步更新）
-- [x] JSON Schema 体系
+- [x] v1 legacy（保持兼容，归档，server 不再直接读取）
+- [x] **v2 内容系统**（server 当前加载路径）：
+  - `data/cards/rules/*.json`：规则真源，不含本地化文案
+  - `data/cards/text/zh-CN/*.json`：中文文案
+  - `data/cards/text/en-US/*.json`：英文文案（最小占位）
+  - `data/sets/core-v1.json`：卡牌集合清单（含全部 21 张已接通卡牌）
+  - `data/content-packs/base.json`：内容包清单
+- [x] JSON Schema 体系（card-rule / card-text / set / content-pack / ruleset / mod-manifest）
+- [x] `packages/schemas` content-loader：`loadRuleBatch / loadMergedBatch / mergeCardDef / getCardText`
+- [x] locale 安全降级（name → cardId，body → ""）
+- [x] artKey 统一命名（默认 = card id，详见 docs/asset-conventions.md）
 
 ---
 
@@ -120,15 +129,16 @@
 - [ ] 断线重连（Colyseus `allowReconnection` 未配置）
 - [ ] 回放记录（命令日志未持久化）
 - [ ] 数据库（PostgreSQL + Prisma 未初始化）
-- [x] AJV 校验：schemas 包已有全套校验器，但 server 加载时**未接入运行时校验**
-- [ ] server 迁移至 v2 加载路径（当前仍读取旧 flat JSON）
+- [ ] AJV 运行时校验：schemas 包已有全套校验器，但 server 加载时未接入运行时校验
+- [ ] client content-loader 集成：cardNames 注入 ViewModel（接口已预留，数据层已就绪）
 
 ### 客户端体验
 
 - [ ] 攻击分配 UI 细化（当前为"全力攻击对手"简化方案）
-- [ ] 延迟弃牌视觉提示（pendingDiscardCount 已广播，RoomScene 尚未展示）
-- [ ] 弃牌堆视图（PublicMatchView 中只暴露 discardSize，不展示内容）
+- [ ] 延迟弃牌视觉提示（pendingDiscardCount 已广播）
+- [ ] 弃牌堆视图（PublicMatchView 中只暴露 discardSize）
 - [ ] 市场补位动画
+- [ ] 正式卡图接入（artKey 已定义，公共目录已规划，详见 docs/asset-conventions.md）
 
 ---
 
@@ -147,7 +157,7 @@
 | effects.test.ts | 25 |
 | schema.test.ts | 34 |
 | delayedDiscard.test.ts | 19 |
-| **pendingChoice.test.ts** | **24** |
+| pendingChoice.test.ts | 24 |
 | **小计** | **216** |
 
 ### schemas 包
@@ -158,4 +168,11 @@
 | content-system.test.ts | 46 |
 | **小计** | **62** |
 
-**总计：278 个测试（engine 216 + schemas 62）**
+### game-client 包
+
+| 文件 | 测试数 |
+|------|--------|
+| viewmodel.test.ts | 13 |
+| **小计** | **13** |
+
+**总计：291 个测试（engine 216 + schemas 62 + game-client 13）**

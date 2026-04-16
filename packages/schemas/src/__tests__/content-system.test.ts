@@ -221,9 +221,11 @@ describe("data/sets/ 文件校验", () => {
     expect(r.valid).toBe(true);
   });
 
-  it("core-v1 包含全部 19 张卡牌（starter+supply+status+market）", () => {
+  it("core-v1 包含全部 21 张卡牌（starter+supply+status+market，含本轮新增 2 张）", () => {
     const s = loadJson("data/sets/core-v1.json") as { cardIds: string[] };
-    expect(s.cardIds.length).toBe(19);
+    expect(s.cardIds.length).toBe(21);
+    expect(s.cardIds).toContain("green_used_book_recycle");
+    expect(s.cardIds).toContain("blue_draft_simulation");
   });
 });
 

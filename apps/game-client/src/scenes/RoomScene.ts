@@ -2,6 +2,7 @@ import Phaser from "phaser";
 import type { PublicMatchView, PrivatePlayerView, PublicCardRef, PendingChoiceView } from "@dev-camcard/protocol";
 import { CMD } from "@dev-camcard/protocol";
 import type { RoomClient } from "../network/RoomClient";
+import { buildBoardViewModel, type BoardViewModel } from "../viewmodel/BoardViewModel";
 
 // ── 颜色/样式常量 ─────────────────────────────────────────────────────────────
 const FONT = "monospace";
@@ -15,35 +16,33 @@ const C_RES     = "#88ccff";
 const C_LANE    = "#cc88ff";
 const C_BTN     = "#222244";
 const C_BTN_TXT = "#ffffff";
-const C_BTN_MY  = "#003355";   // 己方可操作按钮底色
-const C_BTN_ACT = "#004400";   // 动作类按钮（END_TURN）
-const C_BTN_DNG = "#440000";   // 危险类按钮（CONCEDE）
-const C_BTN_SCH = "#223300";   // 日程类按钮
-const C_VENUE   = "#553388";   // 场馆底色
-const C_GUARD   = "#880022";   // 值守场馆底色
-const C_RESERVE = "#334422";   // 预约位底色
-const C_BTN_RSV = "#224433";   // 预约按钮底色（绿偏暗）
+const C_BTN_MY  = "#003355";
+const C_BTN_ACT = "#004400";
+const C_BTN_DNG = "#440000";
+const C_BTN_SCH = "#223300";
+const C_VENUE   = "#553388";
+const C_GUARD   = "#880022";
+const C_RESERVE = "#334422";
+const C_BTN_RSV = "#224433";
 
 /**
  * RoomScene — 最小可玩的 Phaser 联机牌桌。
  *
- * 布局（900×640）：
- *  ┌────────────────────────────────────────────────────────┐
- *  │  顶栏：房间 ID / 回合 / 行动方 / 状态                      │  y=0~50
- *  ├──────────────────┬─────────────────────────────────────┤
- *  │  对方信息          │  商店区（三栏 + 固定补给）               │  y=50~260
- *  ├──────────────────┤                                     │
- *  │  己方信息          │                                     │  y=260~380
- *  ├──────────────────┴─────────────────────────────────────┤
- *  │  己方手牌区                                              │  y=380~500
- *  ├────────────────────────────────────────────────────────┤
- *  │  操作按钮区（READY / ATTACK ALL / END_TURN / CONCEDE）   │  y=500~580
- *  └────────────────────────────────────────────────────────┘
+ * 渲染层通过 ViewModel（BoardViewModel）读取状态，
+ * 不再直接散乱引用原始 PublicMatchView / PrivatePlayerView。
  *
- * 交互原则（non-negotiables.md）：
- *  - 客户端只发命令，不做规则判定
- *  - 全部用点击式交互，不做拖拽
- *  - 规则合法性由 server / engine 验证
+ * 布局（900×640）：
+ *  ┌──────────────────────────────────────────────────────────┐
+ *  │  顶栏：房间 ID / 回合 / 行动方 / 状态                       │  y=0~50
+ *  ├──────────────────┬───────────────────────────────────────┤
+ *  │  对方信息          │  商店区（三栏 + 固定补给）                │  y=50~260
+ *  ├──────────────────┤                                       │
+ *  │  己方信息          │                                       │  y=260~380
+ *  ├──────────────────┴───────────────────────────────────────┤
+ *  │  己方手牌区                                                │  y=380~500
+ *  ├──────────────────────────────────────────────────────────┤
+ *  │  操作按钮区（READY / ATTACK ALL / END_TURN / CONCEDE）    │  y=500~580
+ *  └──────────────────────────────────────────────────────────┘
  */
 export class RoomScene extends Phaser.Scene {
   private view!: PublicMatchView;
@@ -58,9 +57,14 @@ export class RoomScene extends Phaser.Scene {
 
   /**
    * 待提交选择：玩家在选择 UI 中已点击的实例 ID 集合。
-   * 空集合 = 尚未选择（允许提交空选择）。
    */
   private choiceSelected: Set<string> = new Set();
+
+  /**
+   * 可选注入本地化卡牌名称（cardId → localizedName）。
+   * 未来可通过 content-loader 填充；当前为 undefined（降级为 cardId）。
+   */
+  private cardNames?: ReadonlyMap<string, string>;
 
   constructor() {
     super({ key: "RoomScene" });
@@ -75,7 +79,6 @@ export class RoomScene extends Phaser.Scene {
   create(): void {
     this.cameras.main.setBackgroundColor("#0f0f1e");
 
-    // 接管后续更新
     this.roomClient.onStateUpdate = (v: PublicMatchView) => {
       this.view = v;
       this.rebuildUI();
@@ -88,84 +91,77 @@ export class RoomScene extends Phaser.Scene {
     this.rebuildUI();
   }
 
-  // ── UI 重建入口 ───────────────────────────────────────────────────────────────
+  // ── UI 重建入口 ──────────────────────────────────────────────────────────────
 
   private rebuildUI(): void {
-    // 销毁全部旧 UI 对象
     for (const obj of this.uiObjects) obj.destroy();
     this.uiObjects = [];
     this.schedulePendingCard = null;
 
-    // 若没有待处理选择，清空已选状态（防止残留）
-    if (!this.privateView.pendingChoice) {
+    // 构建 ViewModel —— 所有 draw 方法从此消费，不再直接访问 this.view / this.privateView
+    const vm = buildBoardViewModel(this.view, this.privateView, this.cardNames);
+
+    if (!vm.pendingChoice) {
       this.choiceSelected.clear();
     }
 
-    // 若有待处理选择，优先渲染选择 UI（覆盖主界面）
-    if (this.privateView.pendingChoice) {
-      this.drawTopBar();
-      this.drawChoicePanel(this.privateView.pendingChoice);
+    if (vm.pendingChoice) {
+      this.drawTopBar(vm);
+      this.drawChoicePanel(vm, vm.pendingChoice);
       return;
     }
 
-    this.drawTopBar();
-    this.drawOpponentInfo();
-    this.drawShopArea();
-    this.drawMyInfo();
-    this.drawHandArea();
-    this.drawActionButtons();
+    this.drawTopBar(vm);
+    this.drawOpponentInfo(vm);
+    this.drawShopArea(vm);
+    this.drawMyInfo(vm);
+    this.drawHandArea(vm);
+    this.drawActionButtons(vm);
   }
 
   // ── 顶栏 ─────────────────────────────────────────────────────────────────────
 
-  private drawTopBar(): void {
+  private drawTopBar(vm: BoardViewModel): void {
     const W = this.cameras.main.width;
-    const v = this.view;
-    const mySide = this.privateView.side;
-    const active = v.activePlayer === mySide ? "● 我的回合" : "○ 等待对方";
-    const status = v.ended
-      ? `对局结束 · 胜者: 玩家${(v.winner ?? 0) + 1}`
-      : v.started
-      ? `第 ${v.turnNumber} 回合  ${active}`
+    const active = vm.isMyTurn ? "● 我的回合" : "○ 等待对方";
+    const status = vm.ended
+      ? `对局结束 · 胜者: 玩家${(vm.winner ?? 0) + 1}`
+      : vm.started
+      ? `第 ${vm.turnNumber} 回合  ${active}`
       : "等待双方 READY...";
 
-    this.txt(10, 6, `房间: ${v.roomId}`, 11, C_LABEL);
-    this.txt(W / 2, 6, status, 13, v.activePlayer === mySide ? "#88ff88" : C_LABEL, true);
+    this.txt(10, 6, `房间: ${vm.roomId}`, 11, C_LABEL);
+    this.txt(W / 2, 6, status, 13, vm.isMyTurn ? "#88ff88" : C_LABEL, true);
     this.hr(0, 26, W);
   }
 
   // ── 对方信息区 ────────────────────────────────────────────────────────────────
 
-  private drawOpponentInfo(): void {
-    const mySide = this.privateView.side;
-    const oppSide: 0 | 1 = mySide === 0 ? 1 : 0;
-    const opp = this.view.players[oppSide];
+  private drawOpponentInfo(vm: BoardViewModel): void {
+    const opp = vm.opp;
 
     let y = 32;
-    this.txt(10, y, `▌ 对方 [玩家${oppSide + 1}] ${opp.name}`, 13, C_VALUE);
+    this.txt(10, y, `▌ 对方 [玩家${opp.side + 1}] ${opp.name}`, 13, C_VALUE);
     y += 18;
     this.txt(10, y, `HP: ${opp.hp}   防备: ${opp.block}   手牌数: ${opp.handSize}   牌堆: ${opp.deckSize}`, 12, C_HP);
     y += 16;
 
-    // 对方场馆（只显示基本信息，不能交互）
     if (opp.venues.length > 0) {
       this.txt(10, y, "对方场馆:", 11, C_LABEL);
       y += 14;
       for (const venue of opp.venues) {
         const guardLabel = venue.isGuard ? "【值守】" : "【场馆】";
-        this.txt(20, y, `${guardLabel} ${venue.cardId}  耐久:${venue.activationsLeft}/${venue.activationsLeft}`, 11, C_VENUE);
+        this.txt(20, y, `${guardLabel} ${vm.getCardName(venue.cardId)}  耐久:${venue.activationsLeft}/${venue.activationsLeft}`, 11, C_VENUE);
         y += 14;
       }
     }
 
-    // 对方日程槽
-    const schedParts = opp.scheduleSlots.map((s, i) => `[${i + 1}: ${s ? s.id : "空"}]`).join(" ");
+    const schedParts = opp.scheduleSlots.map((s, i) => `[${i + 1}: ${s ? vm.getCardName(s.id) : "空"}]`).join(" ");
     this.txt(10, y, `日程: ${schedParts}`, 11, C_LABEL);
     y += 14;
 
-    // 对方预约位（只显示占位状态，不显示牌面）
     const oppReserveLabel = opp.reservedCard
-      ? `预约位: [已预约: ${opp.reservedCard.id}]`
+      ? `预约位: [已预约: ${vm.getCardName(opp.reservedCard.id)}]`
       : "预约位: [空]";
     this.txt(10, y, oppReserveLabel, 11, opp.reservedCard ? "#aaffaa" : "#555555");
     y += 14;
@@ -175,41 +171,35 @@ export class RoomScene extends Phaser.Scene {
 
   // ── 商店区（三栏 + 固定补给）────────────────────────────────────────────────
 
-  private drawShopArea(): void {
+  private drawShopArea(vm: BoardViewModel): void {
     const W = this.cameras.main.width;
     const shopX = Math.floor(W / 2);
-    const mySide = this.privateView.side;
-    const isMyTurn = this.view.activePlayer === mySide && this.view.started;
 
     let y = 32;
     this.txt(shopX + 4, y, "【商  店】", 13, C_TITLE);
     y += 18;
 
-    // 三栏商店
-    const me = this.view.players[mySide];
-    const canReserve = isMyTurn && !me.hasReservedThisTurn && me.reservedCard === null;
+    const canReserve = vm.isMyTurn && !vm.me.hasReservedThisTurn && vm.me.reservedCard === null;
     const laneW = Math.floor((W - shopX - 8) / 3);
-    for (let i = 0; i < this.view.market.length; i++) {
-      const lane = this.view.market[i];
+    for (let i = 0; i < vm.market.length; i++) {
+      const lane = vm.market[i];
       const lx = shopX + 4 + i * laneW;
       this.txt(lx, y, lane.lane.toUpperCase(), 11, C_LANE);
       for (let si = 0; si < lane.slots.length; si++) {
         const card = lane.slots[si];
         const by = y + 14 + si * 46;
         if (card) {
-          if (isMyTurn) {
-            // 买按钮
-            this.btn(lx, by, laneW - 4, 22, `${card.id}(买)`, 9, C_BTN_MY, C_BTN_TXT, () => {
+          if (vm.isMyTurn) {
+            this.btn(lx, by, laneW - 4, 22, `${vm.getCardName(card.id)}(买)`, 9, C_BTN_MY, C_BTN_TXT, () => {
               this.roomClient.send({ type: CMD.BUY_MARKET_CARD, instanceId: card.instanceId });
             });
-            // 预约按钮（资源 ≥1 且未预约过且预约位空）
             if (canReserve) {
               this.btn(lx, by + 24, laneW - 4, 18, `预约(1资源)`, 9, C_BTN_RSV, "#aaffcc", () => {
                 this.roomClient.send({ type: CMD.RESERVE_MARKET_CARD, instanceId: card.instanceId });
               });
             }
           } else {
-            this.txtBox(lx, by, laneW - 4, 42, card.id, 9, C_BTN, C_LABEL);
+            this.txtBox(lx, by, laneW - 4, 42, vm.getCardName(card.id), 9, C_BTN, C_LABEL);
           }
         } else {
           this.txtBox(lx, by, laneW - 4, 42, "（空）", 9, C_BTN, "#555555");
@@ -219,16 +209,15 @@ export class RoomScene extends Phaser.Scene {
 
     y += 14 + 2 * 46 + 4;
 
-    // 固定补给
     this.txt(shopX + 4, y, "固定补给:", 11, C_LABEL);
     y += 14;
-    for (const cardId of this.view.fixedSupplies) {
-      if (isMyTurn) {
-        this.btn(shopX + 4, y, W - shopX - 12, 22, `${cardId}（无限，点击买）`, 10, C_BTN_MY, C_BTN_TXT, () => {
+    for (const cardId of vm.fixedSupplies) {
+      if (vm.isMyTurn) {
+        this.btn(shopX + 4, y, W - shopX - 12, 22, `${vm.getCardName(cardId)}（无限，点击买）`, 10, C_BTN_MY, C_BTN_TXT, () => {
           this.roomClient.send({ type: CMD.BUY_FIXED_SUPPLY, cardId });
         });
       } else {
-        this.txtBox(shopX + 4, y, W - shopX - 12, 22, cardId, 10, C_BTN, C_LABEL);
+        this.txtBox(shopX + 4, y, W - shopX - 12, 22, vm.getCardName(cardId), 10, C_BTN, C_LABEL);
       }
       y += 26;
     }
@@ -236,27 +225,24 @@ export class RoomScene extends Phaser.Scene {
 
   // ── 己方信息区 ────────────────────────────────────────────────────────────────
 
-  private drawMyInfo(): void {
-    const mySide = this.privateView.side;
-    const me = this.view.players[mySide];
-    const isMyTurn = this.view.activePlayer === mySide && this.view.started;
+  private drawMyInfo(vm: BoardViewModel): void {
+    const me = vm.me;
 
     let y = 140;
-    this.txt(10, y, `▌ 我 [玩家${mySide + 1}] ${me.name}`, 13, C_VALUE);
+    this.txt(10, y, `▌ 我 [玩家${me.side + 1}] ${me.name}`, 13, C_VALUE);
     y += 18;
     this.txt(10, y, `HP: ${me.hp}   防备: ${me.block}`, 12, C_HP);
     y += 16;
     this.txt(10, y, `资源: ${me.resourcePool}   攻击: ${me.attackPool}   牌堆: ${me.deckSize}   弃: ${me.discardSize}`, 12, C_RES);
     y += 16;
 
-    // 己方场馆区 + 启动按钮
     if (me.venues.length > 0) {
       this.txt(10, y, "我的场馆:", 11, C_LABEL);
       y += 14;
       for (const venue of me.venues) {
         const guardLabel = venue.isGuard ? "【值守】" : "【场馆】";
-        const canActivate = isMyTurn && venue.activationsLeft > 0;
-        const label = `${guardLabel} ${venue.cardId}  启动:${venue.activationsLeft}次`;
+        const canActivate = vm.isMyTurn && venue.activationsLeft > 0;
+        const label = `${guardLabel} ${vm.getCardName(venue.cardId)}  启动:${venue.activationsLeft}次`;
         if (canActivate) {
           this.btn(14, y, 220, 22, `${label} (点击启动)`, 10, C_VENUE, C_BTN_TXT, () => {
             this.roomClient.send({ type: CMD.ACTIVATE_VENUE, instanceId: venue.instanceId });
@@ -268,16 +254,13 @@ export class RoomScene extends Phaser.Scene {
       }
     }
 
-    // 日程槽
-    const schedParts = me.scheduleSlots.map((s, i) => `[${i + 1}: ${s ? s.id : "空"}]`).join("  ");
+    const schedParts = me.scheduleSlots.map((s, i) => `[${i + 1}: ${s ? vm.getCardName(s.id) : "空"}]`).join("  ");
     this.txt(10, y, `日程: ${schedParts}`, 11, C_LABEL);
     y += 18;
 
-    // 己方预约位
     if (me.reservedCard) {
-      this.txt(10, y, `预约位: [${me.reservedCard.id}]`, 11, "#aaffaa");
-      // 显示购买预约牌按钮（仅未来回合可用）
-      if (isMyTurn) {
+      this.txt(10, y, `预约位: [${vm.getCardName(me.reservedCard.id)}]`, 11, "#aaffaa");
+      if (vm.isMyTurn) {
         this.btn(130, y, 160, 18, `购买预约牌（折扣1）`, 10, C_BTN_RSV, "#aaffcc", () => {
           this.roomClient.send({ type: CMD.BUY_RESERVED_CARD });
         });
@@ -289,11 +272,9 @@ export class RoomScene extends Phaser.Scene {
 
   // ── 手牌区 ────────────────────────────────────────────────────────────────────
 
-  private drawHandArea(): void {
+  private drawHandArea(vm: BoardViewModel): void {
     const W = this.cameras.main.width;
-    const mySide = this.privateView.side;
-    const hand = this.privateView.hand;
-    const isMyTurn = this.view.activePlayer === mySide && this.view.started;
+    const hand = vm.hand;
 
     const CARD_W = 120;
     const CARD_H = 80;
@@ -307,17 +288,13 @@ export class RoomScene extends Phaser.Scene {
       const card = hand[i];
       const cx = startX + i * (CARD_W + 4);
 
-      if (isMyTurn) {
-        // 右键选项：点击播放，也可安排（如果还有空日程槽）
-        const me = this.view.players[mySide];
-        const freeSlotIdx = me.scheduleSlots.findIndex((s) => s === null);
+      if (vm.isMyTurn) {
+        const freeSlotIdx = vm.me.scheduleSlots.findIndex((s) => s === null);
 
-        // 主按钮：打出
-        this.btn(cx, HAND_Y, CARD_W, CARD_H - 26, `${card.id}\n(点击打出)`, 9, C_BTN_MY, C_BTN_TXT, () => {
+        this.btn(cx, HAND_Y, CARD_W, CARD_H - 26, `${vm.getCardName(card.id)}\n(点击打出)`, 9, C_BTN_MY, C_BTN_TXT, () => {
           this.roomClient.send({ type: CMD.PLAY_CARD, instanceId: card.instanceId });
         });
 
-        // 安排按钮（若有空槽）
         if (freeSlotIdx !== -1) {
           this.btn(cx, HAND_Y + CARD_H - 24, CARD_W, 22, `安排→槽${freeSlotIdx + 1}`, 9, C_BTN_SCH, C_BTN_TXT, () => {
             this.roomClient.send({
@@ -328,68 +305,58 @@ export class RoomScene extends Phaser.Scene {
           });
         }
       } else {
-        this.txtBox(cx, HAND_Y, CARD_W, CARD_H, card.id, 9, C_BTN, C_LABEL);
+        this.txtBox(cx, HAND_Y, CARD_W, CARD_H, vm.getCardName(card.id), 9, C_BTN, C_LABEL);
       }
     }
   }
 
   // ── 操作按钮区 ────────────────────────────────────────────────────────────────
 
-  private drawActionButtons(): void {
+  private drawActionButtons(vm: BoardViewModel): void {
     const W = this.cameras.main.width;
-    const mySide = this.privateView.side;
-    const me = this.view.players[mySide];
-    const isMyTurn = this.view.activePlayer === mySide && this.view.started;
     const BTN_Y = 500;
     const BTN_H = 40;
 
-    // READY（游戏未开始时显示）
-    if (!this.view.started) {
+    if (!vm.started) {
       this.btn(10, BTN_Y, 160, BTN_H, "✓ READY", 14, "#004422", "#aaffaa", () => {
         this.roomClient.send({ type: CMD.READY });
       });
     }
 
-    if (!this.view.ended && isMyTurn) {
-      const oppSide: 0 | 1 = mySide === 0 ? 1 : 0;
+    if (!vm.ended && vm.isMyTurn) {
+      const oppSide = vm.oppSide;
 
-      // ATTACK ALL（若有攻击力）
-      if (me.attackPool > 0) {
-        const label = `⚔ 攻击对手（全力 ${me.attackPool}）`;
+      if (vm.me.attackPool > 0) {
+        const label = `⚔ 攻击对手（全力 ${vm.me.attackPool}）`;
         this.btn(190, BTN_Y, 220, BTN_H, label, 12, C_BTN_DNG, "#ffaaaa", () => {
           this.roomClient.send({
             type: CMD.ASSIGN_ATTACK,
-            assignments: [{ amount: me.attackPool, target: "player", targetSide: oppSide }],
+            assignments: [{ amount: vm.me.attackPool, target: "player", targetSide: oppSide }],
           });
         });
       }
 
-      // END_TURN
       this.btn(424, BTN_Y, 140, BTN_H, "⏎ 结束回合", 13, C_BTN_ACT, "#aaffaa", () => {
         this.roomClient.send({ type: CMD.END_TURN });
       });
     }
 
-    // CONCEDE（任意时刻）
-    if (!this.view.ended) {
+    if (!vm.ended) {
       this.btn(W - 130, BTN_Y, 120, BTN_H, "✕ 投降", 12, C_BTN_DNG, "#ffaaaa", () => {
         this.roomClient.send({ type: CMD.CONCEDE });
       });
     }
 
-    // 对局结束：显示结果
-    if (this.view.ended) {
-      const winner = this.view.winner;
-      const myWin = winner === mySide;
+    if (vm.ended) {
+      const myWin = vm.winner === vm.mySide;
       const msg = myWin ? "🎉 你赢了！" : "💀 你输了";
       this.txt(W / 2, BTN_Y + 10, msg, 22, myWin ? "#88ff88" : "#ff6666", true);
     }
 
-    // 底部状态提示
     this.txt(
       W / 2,
       this.cameras.main.height - 16,
-      isMyTurn ? "你的回合 — 点击手牌打出，点击商店购买，点击场馆启动" : "等待对方操作...",
+      vm.isMyTurn ? "你的回合 — 点击手牌打出，点击商店购买，点击场馆启动" : "等待对方操作...",
       10,
       "#444466",
       true
@@ -398,20 +365,10 @@ export class RoomScene extends Phaser.Scene {
 
   // ── 待处理选择面板 ────────────────────────────────────────────────────────────
 
-  /**
-   * drawChoicePanel — 当 privateView.pendingChoice 非 null 时渲染选择界面。
-   *
-   * 设计原则：
-   *  - 覆盖主界面，避免误操作
-   *  - 候选牌以按钮形式列出，点击切换选中/未选中
-   *  - 提供"确认提交"按钮（发送 SUBMIT_CHOICE）
-   *  - 对于可选 0 张的情况，允许直接点击"跳过"
-   */
-  private drawChoicePanel(choice: PendingChoiceView): void {
+  private drawChoicePanel(vm: BoardViewModel, choice: PendingChoiceView): void {
     const W = this.cameras.main.width;
     const H = this.cameras.main.height;
 
-    // 半透明遮罩
     const mask = this.add.graphics();
     mask.fillStyle(0x000000, 0.75);
     mask.fillRect(0, 30, W, H - 30);
@@ -419,36 +376,29 @@ export class RoomScene extends Phaser.Scene {
 
     let y = 50;
 
-    // 标题
     const titleText = this.choiceTitleText(choice);
     this.txt(W / 2, y, titleText, 14, "#ffff88", true);
     y += 28;
 
-    const mySide = this.privateView.side;
-
-    // 候选牌列表
     let candidates: PublicCardRef[] = [];
     if (choice.type === "chooseCardsFromHand") {
-      candidates = this.privateView.hand;
+      candidates = vm.hand;
     } else if (choice.type === "chooseCardsFromDiscard") {
-      candidates = this.privateView.discard;
+      candidates = vm.discard;
     } else if (choice.type === "chooseCardsFromHandOrDiscard") {
-      // 手牌在上，弃牌堆在下，用分隔线区分
-      candidates = [...this.privateView.hand, ...this.privateView.discard];
+      candidates = [...vm.hand, ...vm.discard];
     } else if (choice.type === "scryDecision") {
       candidates = choice.revealedCards;
     }
 
-    // 渲染候选牌按钮
     const CARD_W = 130;
     const CARD_H = 60;
     const startX = Math.max(10, (W - candidates.length * (CARD_W + 6)) / 2);
 
-    // 区域说明（HandOrDiscard）
-    if (choice.type === "chooseCardsFromHandOrDiscard" && this.privateView.hand.length > 0) {
+    if (choice.type === "chooseCardsFromHandOrDiscard" && vm.hand.length > 0) {
       this.txt(startX, y, "← 手牌", 10, "#aaaaff");
-      if (this.privateView.discard.length > 0) {
-        const discardStartX = startX + this.privateView.hand.length * (CARD_W + 6) + 4;
+      if (vm.discard.length > 0) {
+        const discardStartX = startX + vm.hand.length * (CARD_W + 6) + 4;
         this.txt(discardStartX, y, "弃牌堆 →", 10, "#ffaaaa");
       }
       y += 14;
@@ -465,7 +415,7 @@ export class RoomScene extends Phaser.Scene {
       const bgColor = isSelected ? "#226622" : "#222244";
       const borderLabel = isSelected ? "✓ " : "";
 
-      this.btn(cx, y, CARD_W, CARD_H, `${borderLabel}${c.id}`, 9, bgColor, isSelected ? "#aaffaa" : "#cccccc", () => {
+      this.btn(cx, y, CARD_W, CARD_H, `${borderLabel}${vm.getCardName(c.id)}`, 9, bgColor, isSelected ? "#aaffaa" : "#cccccc", () => {
         if (this.choiceSelected.has(c.instanceId)) {
           this.choiceSelected.delete(c.instanceId);
         } else {
@@ -481,13 +431,11 @@ export class RoomScene extends Phaser.Scene {
 
     y += CARD_H + 16;
 
-    // 选中数量提示
     const selCount = this.choiceSelected.size;
     const maxCount = choice.type === "scryDecision" ? choice.maxDiscard : (choice as { maxCount: number }).maxCount;
     this.txt(W / 2, y, `已选: ${selCount} / 最多 ${maxCount} 张`, 11, "#aaaaaa", true);
     y += 20;
 
-    // 提交按钮
     const canSubmit = selCount <= maxCount;
     if (canSubmit) {
       const btnLabel = selCount === 0 ? "跳过（不选）" : `确认报废 / 弃掉 ${selCount} 张`;
@@ -516,7 +464,6 @@ export class RoomScene extends Phaser.Scene {
 
   // ── UI 辅助工厂 ───────────────────────────────────────────────────────────────
 
-  /** 添加一行文字，返回文字对象 */
   private txt(
     x: number, y: number, text: string, size: number,
     color: string, centered = false
@@ -527,7 +474,6 @@ export class RoomScene extends Phaser.Scene {
     return t;
   }
 
-  /** 添加水平分割线 */
   private hr(x: number, y: number, w: number): void {
     const g = this.add.graphics();
     g.lineStyle(1, 0x333355, 1);
@@ -535,7 +481,6 @@ export class RoomScene extends Phaser.Scene {
     this.uiObjects.push(g);
   }
 
-  /** 添加纯文本框（不可点击） */
   private txtBox(
     x: number, y: number, w: number, h: number,
     text: string, size: number, bgColor: string, textColor: string
@@ -552,7 +497,6 @@ export class RoomScene extends Phaser.Scene {
     return container;
   }
 
-  /** 添加可点击按钮，返回 container */
   private btn(
     x: number, y: number, w: number, h: number,
     text: string, size: number, bgColor: string, textColor: string,

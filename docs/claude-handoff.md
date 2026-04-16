@@ -2,61 +2,48 @@
 
 ## 当前完成状态（本轮）
 
-本轮完成了**效果执行框架升级**：从"若干特例效果"演化为具备长期扩展能力的统一执行框架，并落地了 `trashFromHandOrDiscard` 和交互式 `scry` 两个复杂能力。
+本轮完成了**数据层内容系统升级**和**客户端 ViewModel 层**的建立：规则数据与本地化文案彻底分层，服务端迁移至 v2 加载路径，客户端渲染层建立统一 ViewModel 入口。
 
 ### 核心变更
 
-1. **统一 pending-choice 模型**（`packages/engine/src/effects.ts`）
-   - 新增 `PendingChoice` discriminated union（4 种类型：chooseCardsFromHand / Discard / HandOrDiscard / scryDecision）
-   - 支持 `minCount / maxCount / remainingEffects / activeSide / forSide`
-   - `applyStateEffects` 改为顺序处理，遇到 choice 效果后暂停并写入 `pendingChoice`
-   - 新增 `resolveChoice` 函数，处理玩家响应并继续结算 `remainingEffects`
+1. **服务端迁移至 v2 内容加载路径**（`apps/server/src/rooms/GameRoom.ts`）
+   - 从 `data/cards/rules/*.json` 加载规则（不含文案），替换旧 flat JSON
+   - 依赖 `@dev-camcard/schemas` 的 `loadRuleBatch` / `CardRuleData`
+   - `CardAbility.condition` 类型从 `string` 改为 `unknown`，与引擎的 `CardCondition` 结构兼容
+   - `server/tsconfig.json` 补充 `resolveJsonModule: true`（支持引用 schemas 包的 JSON 导入）
 
-2. **新增 CardEffect**
-   - `trashFromHandOrDiscard`（zone = hand/discard/either）
-   - `scry` 新增 `interactive?: boolean` 字段（true = 等待玩家决策）
+2. **集合清单更新**（`data/sets/core-v1.json`）
+   - 新增 `green_used_book_recycle`、`blue_draft_simulation` 两张卡（前轮新增但未加入清单）
 
-3. **InternalMatchState 新增字段**（`packages/engine/src/types.ts`）
-   - `pendingChoice: PendingChoice | null`
+3. **客户端 ViewModel 层**（`apps/game-client/src/viewmodel/BoardViewModel.ts`）
+   - `BoardViewModel` 接口 + `PlayerViewModel` 接口
+   - `buildBoardViewModel(pub, priv, cardNames?)` 纯函数：
+     - 推导 `mySide / oppSide / isMyTurn`
+     - 拍平 `hand / discard / pendingChoice`
+     - `getCardName()` 支持 locale 注入 + 安全降级（返回 cardId）
+   - RoomScene 所有 draw 方法消费 `vm`，不再直接散读原始视图
 
-4. **Protocol 扩展**（`packages/protocol/src/`）
-   - `SUBMIT_CHOICE` 命令 + `SubmitChoiceCmd`
-   - `PendingChoiceView` 类型（客户端视图）
-   - `PrivatePlayerView` 新增 `discard: PublicCardRef[]` + `pendingChoice: PendingChoiceView | null`
-   - `PublicMatchView` 新增 `pendingChoiceSide: PlayerSide | null`
+4. **测试**（`apps/game-client/src/__tests__/viewmodel.test.ts`，13 个）
+   - game-client 新增 Vitest 配置
 
-5. **reduce.ts 保护**（`packages/engine/src/reduce.ts`）
-   - `SUBMIT_CHOICE` 分发到 `resolveChoice`
-   - `assertNoPendingChoice` 保护：有 pending 时除 SUBMIT_CHOICE / CONCEDE 外一律拒绝
-
-6. **投影层**（`packages/engine/src/projections.ts`）
-   - `toPrivatePlayerView` 包含 `discard` + `pendingChoice`（仅给 `forSide` 对应玩家）
-
-7. **客户端选择 UI**（`apps/game-client/src/scenes/RoomScene.ts`）
-   - `drawChoicePanel`：遮罩 + 候选牌按钮 + 选中高亮 + 确认提交
-   - `choiceSelected` 状态跟踪
-
-8. **新增卡牌数据**（`data/cards/market-core.json` + `rules/` + `text/`）
-   - `green_used_book_recycle`（trashFromHandOrDiscard + gainResource）
-   - `blue_draft_simulation`（interactive scry + gainResource）
-
-9. **测试**：`pendingChoice.test.ts`（24 个）
-
-10. **文档**：`docs/effect-execution-model.md`
+5. **文档**
+   - 新建 `docs/asset-conventions.md`（artKey 命名规则、资源目录、正式卡图接入路径）
+   - 新建 `docs/client-viewmodel.md`（ViewModel 层设计、使用方式、扩展路径）
 
 ---
 
 ## 历史任务（已整合为背景）
 
-### 数据层内容系统升级（上轮）
+### 效果执行框架升级（上上轮）
+
+统一 pending-choice 模型，trashFromHandOrDiscard，interactive scry，
+blue_draft_simulation / green_used_book_recycle 接通，client 选择 UI。
+
+### 数据层内容系统升级（上轮完成 schema / loader，本轮完成 server 迁移）
 
 规则数据与本地化文案分层，v2 schema 体系，content-loader，locale fallback。
 
-### queueDelayedDiscard 白色控制链
-
-### 商店主循环 / 预约位机制
-
-### 效果系统初版
+### queueDelayedDiscard 白色控制链 / 商店主循环 / 预约位机制 / 效果系统初版
 
 ---
 
@@ -79,7 +66,7 @@
 | ASSIGN_ATTACK（guard 限制） | ✅ |
 | END_TURN（含日程槽结算） | ✅ |
 | CONCEDE | ✅ |
-| **SUBMIT_CHOICE** | **✅ 本轮** |
+| SUBMIT_CHOICE | ✅ |
 
 ---
 
@@ -95,11 +82,11 @@
 | drawThenDiscard | self | — | ✅ |
 | createPressure | self / opponent | — | ✅ |
 | scry（非交互） | self | — | ✅ MVP |
-| **scry（interactive）** | **self** | **✅ 玩家选择弃 0~1 张** | **✅ 本轮** |
+| scry（interactive） | self | ✅ 玩家选择弃 0~1 张 | ✅ |
 | setFlag | self | — | ✅ |
 | gainFaceUpCard | — | — | ⚠️ no-op 占位 |
 | queueDelayedDiscard | self / opponent | — | ✅ |
-| **trashFromHandOrDiscard** | **self** | **✅ 玩家选择目标** | **✅ 本轮** |
+| trashFromHandOrDiscard | self | ✅ 玩家选择目标 | ✅ |
 
 ## 已支持 CardCondition 总表
 
@@ -118,9 +105,10 @@
 - **场馆 onPlay 效果**：进场时无效果（onActivate 已实现）
 - **断线重连**：Colyseus 层未配置 `allowReconnection`
 - **回放记录**：未实现
-- **完整 66 张市场牌**：当前 13 张，course 偏少
+- **完整 66 张市场牌**：当前 13 张
 - **gainFaceUpCard**：no-op 占位，需确定牌源
 - **scry 完整排序**：当前只能弃 0~1 张，无法自定义剩余顺序
+- **client cardNames 注入**：接口已预留，需在 BootScene/RoomScene 加载 locale 文案后填入
 
 ---
 
@@ -129,63 +117,75 @@
 ```
 data/
   cards/
-    # ── v1 legacy（server 当前读取路径）──
+    # ── v2 内容系统（server 当前读取路径）──
+    rules/
+      starter.json
+      fixed-supplies.json
+      market-core.json     13 种市场牌（含 used_book_recycle + draft_simulation）
+      status.json
+    text/zh-CN/
+      starter.json / fixed-supplies.json / market-core.json / status.json
+    text/en-US/
+      starter.json / fixed-supplies.json / market-core.json / status.json
+
+    # ── v1 legacy（归档，不再被 server 读取）──
     starter.json
     fixed-supplies.json
+    market-core.json
     status.json
-    market-core.json     13 种市场牌（本轮新增 used_book_recycle + draft_simulation）
 
-    # ── v2 内容系统（新分层结构）──
-    rules/
-      market-core.json   （同步更新，含新卡）
-    text/zh-CN/
-      market-core.json   （同步更新）
-    text/en-US/
-      market-core.json   （同步更新）
+  sets/
+    core-v1.json     21 张卡牌 ID（含本轮新增 2 张）
+  content-packs/
+    base.json
+  rulesets/
+    core-v1.json
 ```
 
 ---
 
 ## 测试覆盖
 
-### engine 包（本轮后）
-
-| 文件 | 测试数 | 本轮变化 |
-|------|--------|---------|
-| reduce.test.ts | 47 | 0 |
-| market.test.ts | 24 | 0 |
-| turn.test.ts | 12 | 0 |
-| deck.test.ts | 13 | 0 |
-| engine.test.ts | 1 | 0 |
-| reserve.test.ts | 17 | 0 |
-| effects.test.ts | 25 | 0 |
-| schema.test.ts | 34 | +2（新卡数据验证）|
-| delayedDiscard.test.ts | 19 | 0 |
-| **pendingChoice.test.ts** | **24** | **✅ 本轮新增** |
-| **小计** | **216** | |
-
-### schemas 包（62 个，无变化）
+| 包 | 文件 | 测试数 |
+|----|------|--------|
+| engine | reduce.test.ts | 47 |
+| engine | market.test.ts | 24 |
+| engine | turn.test.ts | 12 |
+| engine | deck.test.ts | 13 |
+| engine | engine.test.ts | 1 |
+| engine | reserve.test.ts | 17 |
+| engine | effects.test.ts | 25 |
+| engine | schema.test.ts | 34 |
+| engine | delayedDiscard.test.ts | 19 |
+| engine | pendingChoice.test.ts | 24 |
+| schemas | validate.test.ts | 16 |
+| schemas | content-system.test.ts | 46 |
+| game-client | viewmodel.test.ts | 13 |
+| **合计** | | **291** |
 
 ---
 
 ## 下一步推荐
 
-1. **server 迁移至 v2 加载路径**：`GameRoom.ts` 改从 `data/cards/rules/*.json` 加载
+1. **client cardNames 注入**：在 `BootScene` 加载 locale 文案，构建 `Map<cardId, name>` 后传给 `buildBoardViewModel`，卡牌名称从 id 变为中文展示名
 2. **gainFaceUpCard 落地**：确定牌源（固定堆 / 弃牌堆 / cardId），实现 no-op → 真实效果
 3. **scry 完整排序**：`SubmitChoiceCmd` 加 `orderedInstanceIds`，`resolveScryChoice` 按序放回
 4. **chooseTarget（场馆选择）**：新增 `chooseTarget` pending 类型，扩展攻击分配 UI
 5. **断线重连**：Colyseus `allowReconnection` + 重连后重发私有视图
 6. **回放记录**：命令日志写入数据库
-7. **补全市场牌**（Codex 适合）：利用已支持的 op 批量补充 red/blue/green/neutral 牌池
+7. **补全市场牌**：利用已支持 op 批量补充 red/blue/green/neutral 牌池（至少到 24 张）
+8. **AJV 运行时校验接入**：server 加载数据时调用 `assertCardRule` 验证数据文件
 
 ## 测试命令
 
 ```bash
-# 引擎测试（含 pendingChoice）
+# 全部测试
 pnpm --filter @dev-camcard/engine test
+pnpm --filter @dev-camcard/schemas test
+pnpm --filter @dev-camcard/game-client test
 
 # 构建检查
-pnpm --filter @dev-camcard/server build
+pnpm --filter @dev-camcard/server typecheck
 pnpm --filter game-client build
 
 # 本地开发

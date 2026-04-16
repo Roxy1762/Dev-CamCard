@@ -32,7 +32,8 @@ export interface CardEffect {
 export interface CardAbility {
   trigger: string;
   effects: CardEffect[];
-  condition?: string;
+  /** condition 对象格式（如 { type: "firstActionThisTurn" }）或 undefined */
+  condition?: unknown;
 }
 
 /**

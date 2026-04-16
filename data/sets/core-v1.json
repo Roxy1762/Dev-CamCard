@@ -23,6 +23,8 @@
     "white_discipline_warning",
     "white_dorm_inspection",
     "white_student_affairs_talk",
-    "neutral_finals_week"
+    "neutral_finals_week",
+    "green_used_book_recycle",
+    "blue_draft_simulation"
   ]
 }
