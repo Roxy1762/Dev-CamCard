@@ -81,6 +81,8 @@ function toPublicPlayerSummary(player: InternalPlayerState): PublicPlayerSummary
     cardId: v.cardId,
     owner: v.owner,
     isGuard: v.isGuard,
+    durability: v.durability,
+    maxDurability: v.maxDurability,
     activationsLeft: v.activationsLeft,
   }));
 

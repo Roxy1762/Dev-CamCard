@@ -161,7 +161,7 @@ export class RoomScene extends Phaser.Scene {
       y += 14;
       for (const venue of opp.venues) {
         const guardLabel = venue.isGuard ? "【值守】" : "【场馆】";
-        this.txt(20, y, `${guardLabel} ${vm.getCardName(venue.cardId)}  耐久:${venue.activationsLeft}/${venue.activationsLeft}`, 11, C_VENUE);
+        this.txt(20, y, `${guardLabel} ${vm.getCardName(venue.cardId)}  耐久:${venue.durability}/${venue.maxDurability}`, 11, C_VENUE);
         y += 14;
       }
     }

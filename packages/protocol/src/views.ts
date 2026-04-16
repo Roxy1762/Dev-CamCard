@@ -27,6 +27,10 @@ export interface PublicVenueView {
   cardId: string;
   owner: PlayerSide;
   isGuard: boolean;
+  /** 当前剩余耐久 */
+  durability: number;
+  /** 最大耐久值 */
+  maxDurability: number;
   /** 本回合剩余可启动次数 */
   activationsLeft: number;
 }
