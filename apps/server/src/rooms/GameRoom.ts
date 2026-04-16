@@ -16,6 +16,8 @@ import {
   assertRulesetDef,
   type CardRuleData,
 } from "@dev-camcard/schemas";
+import { getPrisma } from "../prisma";
+import { Prisma } from "@prisma/client";
 
 // ── 数据加载（模块级，仅执行一次）────────────────────────────────────────────
 
@@ -113,6 +115,9 @@ const RECONNECTION_TIMEOUT_SECS = 60;
  *
  * v2 迁移：从 data/cards/rules/*.json 加载规则（不含本地化文案），
  * 通过 @dev-camcard/schemas 的 loadRuleBatch 获取 CardRuleData[]。
+ *
+ * 持久化：对局开始时写 Match + MatchPlayer，事件逐条落库，结束时写 winner/endedAt。
+ * 所有 DB 操作均 fire-and-forget（不阻塞游戏逻辑，错误仅 log）。
  */
 export class GameRoom extends Room {
   maxClients = 2;
@@ -128,6 +133,12 @@ export class GameRoom extends Room {
   private matchEvents: MatchEvent[] = [];
   private matchSnapshot!: MatchSnapshot;
   private eventSeq = 0;
+
+  // ── DB 写入状态 ───────────────────────────────────────────────────────────────
+  /** DB 创建成功后置 true，防止重复写入 MATCH_END */
+  private dbMatchCreated = false;
+  /** 对局结束事件是否已持久化 */
+  private dbMatchEnded = false;
 
   private pushEvent(type: string, side?: PlayerSide, data?: Record<string, unknown>): void {
     this.matchEvents.push({ seq: this.eventSeq++, ts: Date.now(), type, side, data });
@@ -151,6 +162,11 @@ export class GameRoom extends Room {
 
     // 记录对局开始事件
     this.pushEvent("MATCH_START");
+
+    // ── 持久化：写 Match 记录（players 在 onJoin 时追加）────────────────────
+    this.dbCreateMatch().catch((err) =>
+      console.error("[GameRoom][DB] 创建 Match 失败:", err)
+    );
 
     // 统一消息处理器：客户端发 { type: CMD.*, ...payload }
     this.onMessage("*", (client: Client, type: string | number, message: unknown) => {
@@ -191,6 +207,12 @@ export class GameRoom extends Room {
         i === side ? { ...p, name: opts.playerName ?? `玩家${side + 1}` } : p
       ) as [typeof this.matchState.players[0], typeof this.matchState.players[1]];
       this.matchState = { ...this.matchState, players };
+
+      // 持久化玩家信息
+      const playerName = opts.playerName ?? `玩家${side + 1}`;
+      this.dbUpsertPlayer(side, playerName).catch((err) =>
+        console.error("[GameRoom][DB] upsert MatchPlayer 失败:", err)
+      );
     }
 
     console.log(`[GameRoom] 玩家加入: ${client.sessionId} (side=${side})`);
@@ -235,6 +257,12 @@ export class GameRoom extends Room {
   onDispose(): void {
     // 记录对局结束
     this.pushEvent("MATCH_END");
+    // 若对局已经有结果，持久化 endedAt + winner
+    if (!this.dbMatchEnded && this.dbMatchCreated) {
+      this.dbEndMatch(this.matchState.winner ?? null).catch((err) =>
+        console.error("[GameRoom][DB] endMatch 失败:", err)
+      );
+    }
     console.log(`[GameRoom] 房间销毁: ${this.roomId}, 事件总数: ${this.matchEvents.length}`);
   }
 
@@ -272,7 +300,7 @@ export class GameRoom extends Room {
     const baseData: Record<string, unknown> = {};
 
     // 按命令类型提取最小字段
-    const cmd = command as Record<string, unknown>;
+    const cmd = command as unknown as Record<string, unknown>;
     if ("instanceId" in cmd) baseData["instanceId"] = cmd["instanceId"];
     if ("cardId" in cmd) baseData["cardId"] = cmd["cardId"];
     if ("slotIndex" in cmd) baseData["slotIndex"] = cmd["slotIndex"];
@@ -281,11 +309,79 @@ export class GameRoom extends Room {
       baseData["assignments"] = cmd["assignments"];
     }
 
-    this.pushEvent(type, side, Object.keys(baseData).length > 0 ? baseData : undefined);
+    const data = Object.keys(baseData).length > 0 ? baseData : undefined;
+    this.pushEvent(type, side, data);
 
-    // 若对局已结束，记录 MATCH_END
+    // ── 持久化事件 ──────────────────────────────────────────────────────────
+    const evt = this.matchEvents[this.matchEvents.length - 1];
+    this.dbWriteEvent(evt).catch((err) =>
+      console.error("[GameRoom][DB] 写入事件失败:", err)
+    );
+
+    // 若对局已结束，记录 MATCH_END 并持久化
     if (this.matchState.ended && this.matchEvents[this.matchEvents.length - 1]?.type !== "MATCH_END") {
       this.pushEvent("MATCH_END", undefined, { winner: this.matchState.winner });
+      const endEvt = this.matchEvents[this.matchEvents.length - 1];
+      this.dbWriteEvent(endEvt).catch((err) =>
+        console.error("[GameRoom][DB] 写入 MATCH_END 事件失败:", err)
+      );
+      if (!this.dbMatchEnded && this.dbMatchCreated) {
+        this.dbMatchEnded = true;
+        this.dbEndMatch(this.matchState.winner ?? null).catch((err) =>
+          console.error("[GameRoom][DB] endMatch 失败:", err)
+        );
+      }
     }
+  }
+
+  // ── DB 操作（fire-and-forget，不阻塞游戏逻辑）──────────────────────────────
+
+  private async dbCreateMatch(): Promise<void> {
+    const prisma = getPrisma();
+    await prisma.match.create({
+      data: {
+        id: this.roomId,
+        rulesetVersion: this.matchSnapshot.rulesetVersion,
+        contentSets: this.matchSnapshot.contentSets,
+        startedAt: new Date(this.matchSnapshot.startedAt),
+      },
+    });
+    this.dbMatchCreated = true;
+  }
+
+  private async dbUpsertPlayer(side: PlayerSide, name: string): Promise<void> {
+    if (!this.dbMatchCreated) return; // Match 尚未落库，跳过（极低概率竞争）
+    const prisma = getPrisma();
+    await prisma.matchPlayer.upsert({
+      where: { matchId_side: { matchId: this.roomId, side } },
+      create: { matchId: this.roomId, side, name },
+      update: { name },
+    });
+  }
+
+  private async dbWriteEvent(evt: MatchEvent): Promise<void> {
+    if (!this.dbMatchCreated) return; // 等待 match 落库
+    const prisma = getPrisma();
+    await prisma.matchEvent.create({
+      data: {
+        matchId: this.roomId,
+        seq: evt.seq,
+        ts: BigInt(evt.ts),
+        type: evt.type,
+        side: evt.side ?? null,
+        data: evt.data != null ? (evt.data as Prisma.InputJsonValue) : Prisma.JsonNull,
+      },
+    });
+  }
+
+  private async dbEndMatch(winner: number | null): Promise<void> {
+    const prisma = getPrisma();
+    await prisma.match.update({
+      where: { id: this.roomId },
+      data: {
+        endedAt: new Date(),
+        winner,
+      },
+    });
   }
 }

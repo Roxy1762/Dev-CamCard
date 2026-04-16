@@ -14,6 +14,22 @@
 - [x] Phaser + Colyseus 联机牌桌（BootScene + RoomScene）
 - [x] 数据文件（starter / fixed-supplies / market-core / status / core-v1 ruleset）
 
+### 数据库持久化（本轮新增）✅
+
+- [x] **PostgreSQL + Prisma 7 初始化**：`apps/server/prisma/schema.prisma` + `prisma.config.ts`
+- [x] **三张表**：`Match` / `MatchPlayer` / `MatchEvent`
+- [x] **Prisma 单例**：`apps/server/src/prisma.ts`，基于 `@prisma/adapter-pg`
+- [x] **GameRoom 落库**：
+  - `onCreate` → 写 Match 记录（matchId / rulesetVersion / contentSets / startedAt）
+  - `onJoin` → upsert MatchPlayer（side / name，支持重连）
+  - 每条命令 → fire-and-forget 写 MatchEvent
+  - 对局结束 → 写 Match.endedAt + Match.winner
+- [x] **只读 API**：
+  - `GET /api/matches`：最近 50 场（含 players，按 startedAt 倒序）
+  - `GET /api/matches/:id`：单场详情
+  - `GET /api/matches/:id/events`：事件流（ts 序列化为字符串）
+- [x] **降级安全**：DB 不可用时 GameRoom 不崩溃，仅 log 错误
+
 ### 断线重连
 
 - [x] **服务端 allowReconnection**：`onLeave` 改为 async，调用 `allowReconnection(client, 60)`（60 秒超时）
@@ -118,6 +134,8 @@
 - [x] **AJV 运行时校验**：card rule / card text / set / content-pack / ruleset 全程受 schema 保护
 - [x] **断线重连**：`allowReconnection(client, 60)`，重连后推送完整状态
 - [x] **事件日志**：内存事件流，加入 / 重连 / REQUEST_MATCH_EVENTS 时推送
+- [x] **持久化**：Match / MatchPlayer / MatchEvent 三表落库（PostgreSQL + Prisma 7）
+- [x] **只读 API**：`GET /api/matches`、`/api/matches/:id`、`/api/matches/:id/events`
 
 ### 客户端（game-client）
 
@@ -157,8 +175,7 @@
 ### 基础设施
 
 - [ ] **回放完整播放器**：ReplayScene 目前为列表展示骨架，无逐步重建能力
-- [ ] **数据库持久化**：MatchEventLog 内存存储，未写入 PostgreSQL + Prisma
-- [ ] 数据库（PostgreSQL + Prisma 未初始化）
+- [ ] **管理后台**：对局历史查询页（Next.js admin，基于 /api/matches）
 
 ### 客户端体验
 
@@ -204,7 +221,14 @@
 |------|--------|
 | viewmodel.test.ts | 13 |
 | locale.test.ts | 10 |
-| **eventLog.test.ts** | **8** |
+| eventLog.test.ts | 8 |
 | **小计** | **31** |
 
-**总计：337 个测试（engine 230 + schemas 76 + game-client 31）**
+### server 包（本轮新增）
+
+| 文件 | 测试数 |
+|------|--------|
+| persistence.test.ts | 7 |
+| **小计** | **7** |
+
+**总计：344 个测试（engine 230 + schemas 76 + game-client 31 + server 7）**

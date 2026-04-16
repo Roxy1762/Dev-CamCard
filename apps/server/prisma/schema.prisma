@@ -1,0 +1,54 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ── 对局主记录 ────────────────────────────────────────────────────────────────
+
+model Match {
+  id             String        @id              // Colyseus roomId
+  rulesetVersion String
+  contentSets    String[]                       // e.g. ["starter","market-core",...]
+  startedAt      DateTime
+  endedAt        DateTime?
+  winner         Int?                           // 0 | 1 | null（未结束）
+
+  players        MatchPlayer[]
+  events         MatchEvent[]
+}
+
+// ── 参赛玩家 ──────────────────────────────────────────────────────────────────
+
+model MatchPlayer {
+  id        Int     @id @default(autoincrement())
+  matchId   String
+  side      Int                                 // 0 | 1
+  name      String
+
+  match     Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@unique([matchId, side])
+  @@index([matchId])
+}
+
+// ── 对局事件流 ────────────────────────────────────────────────────────────────
+
+model MatchEvent {
+  id        Int     @id @default(autoincrement())
+  matchId   String
+  seq       Int
+  ts        BigInt                              // Date.now() milliseconds
+  type      String
+  side      Int?
+  data      Json?
+
+  match     Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId, seq])
+}
