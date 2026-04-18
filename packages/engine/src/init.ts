@@ -22,6 +22,31 @@ export interface RulesetConfig {
 }
 
 const LANE_ORDER: Lane[] = ["course", "activity", "daily"];
+const MARKET_RARITY_COPIES: Record<string, number> = {
+  common: 5,
+  uncommon: 3,
+  rare: 2,
+};
+
+/**
+ * resolveMarketCopiesByRarity — 将 rarity 映射为市场供给复制数。
+ *
+ * 默认规则：
+ *  - common -> 5
+ *  - uncommon -> 3
+ *  - rare -> 2
+ *
+ * 兼容映射：
+ *  - mid -> uncommon
+ *  - elite/higher -> rare
+ *  - 缺失或未知 rarity -> common（保证旧数据可继续运行）
+ */
+export function resolveMarketCopiesByRarity(rarity?: string): number {
+  const normalized = String(rarity ?? "common").trim().toLowerCase();
+  if (normalized === "mid") return MARKET_RARITY_COPIES.uncommon;
+  if (normalized === "elite" || normalized === "higher") return MARKET_RARITY_COPIES.rare;
+  return MARKET_RARITY_COPIES[normalized] ?? MARKET_RARITY_COPIES.common;
+}
 
 /**
  * createMarketState — 为三栏市场构造初始公开槽位 + 隐藏牌堆（纯函数）。

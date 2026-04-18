@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { buyFromMarket, buyFixedSupply } from "../market";
-import { createMarketState } from "../init";
+import { createMarketState, resolveMarketCopiesByRarity } from "../init";
 import type { CardInstance, InternalMatchState, InternalPlayerState, MarketLaneState } from "../types";
 
 // ── 辅助工厂 ──────────────────────────────────────────────────────────────────
@@ -340,5 +340,72 @@ describe("createMarketState", () => {
     // daily 有 2 张：2 公开 0 入堆
     expect(result[2].slots.filter(Boolean)).toHaveLength(2);
     expect(result[2].deck).toHaveLength(0);
+  });
+});
+
+describe("market rarity copies", () => {
+  let rarityId = 0;
+  const raritySeqId = () => `rarity-m-${rarityId++}`;
+  const expand = (cards: Array<{ id: string; rarity?: string }>) =>
+    cards.flatMap((card) =>
+      Array.from({ length: resolveMarketCopiesByRarity(card.rarity) }, () => card.id)
+    );
+
+  beforeEach(() => {
+    rarityId = 0;
+  });
+
+  it("common 会复制为 5 份", () => {
+    const pool = expand([{ id: "common_card", rarity: "common" }]);
+    expect(pool).toHaveLength(5);
+  });
+
+  it("uncommon 会复制为 3 份", () => {
+    const pool = expand([{ id: "uncommon_card", rarity: "uncommon" }]);
+    expect(pool).toHaveLength(3);
+  });
+
+  it("rare 会复制为 2 份", () => {
+    const pool = expand([{ id: "rare_card", rarity: "rare" }]);
+    expect(pool).toHaveLength(2);
+  });
+
+  it("市场初始化后仍可正常展示公开槽位", () => {
+    const pool = expand([
+      { id: "c_common", rarity: "common" },
+      { id: "c_rare", rarity: "rare" },
+    ]);
+    const [lane] = createMarketState([{ lane: "course", cardIds: pool }], 2, raritySeqId, () => 0);
+    expect(lane.slots).toHaveLength(2);
+    expect(lane.slots.filter(Boolean)).toHaveLength(2);
+  });
+
+  it("购买后仍能从该栏牌堆正常补位", () => {
+    const pool = expand([
+      { id: "c_common", rarity: "common" },
+      { id: "c_uncommon", rarity: "uncommon" },
+    ]);
+    const [lane] = createMarketState([{ lane: "course", cardIds: pool }], 2, raritySeqId, () => 0);
+    const target = lane.slots[0];
+    const state = makeState({
+      market: [lane, { lane: "activity", slots: [null, null], deck: [] }, { lane: "daily", slots: [null, null], deck: [] }],
+    });
+    const result = buyFromMarket(state, 0, target!.instanceId, 0);
+    expect(result.market[0].slots[0]).not.toBeNull();
+  });
+
+  it("市场牌堆耗尽时，购买后槽位会正确变为 null", () => {
+    const [lane] = createMarketState(
+      [{ lane: "course", cardIds: expand([{ id: "c_rare", rarity: "rare" }]) }],
+      2,
+      raritySeqId,
+      () => 0
+    );
+    const state = makeState({
+      market: [lane, { lane: "activity", slots: [null, null], deck: [] }, { lane: "daily", slots: [null, null], deck: [] }],
+    });
+    const result = buyFromMarket(state, 0, lane.slots[0]!.instanceId, 0);
+    expect(result.market[0].slots[0]).toBeNull();
+    expect(result.market[0].deck).toHaveLength(0);
   });
 });

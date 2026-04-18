@@ -19,6 +19,7 @@
 - 三栏市场公开槽位 + 补位机制可运行。
 - 固定补给购买可运行。
 - 预约与预约位购买（含折扣）可运行。
+- 市场供给已升级为 rarity copies：`common=5`、`uncommon=3`、`rare=2`，并在市场构造阶段生效（不再是纯文案标签）。
 
 ### 4) 选择与效果系统
 - `chooseTarget`、`gainFaceUpCard`、交互 `scry`、`trashFromHandOrDiscard` 已接入。
@@ -61,7 +62,7 @@
 
 ### 3) 规则与数据约束（效果 schema 已收紧）
 - effect schema 已从松散 `additionalProperties: true` 改为按 op 的 `oneOf`；data 与 engine 的 `drawThenDiscard` 字段已统一。
-- 市场供给模型仍偏薄（接近 singleton），尚未转向 rarity copies。
+- rarity 缺失/未知值默认按 `common` 处理；兼容映射 `mid -> uncommon`、`elite/higher -> rare`，用于旧内容字段过渡。
 
 ### 4) 内容与平衡
 - starter 已调整为 5/3/2/2（allowance/quarrel/draft_paper/punctuality），起手曲线较旧版更平滑。

@@ -2,6 +2,20 @@
 
 > 当前项目已从“概念验证”进入**可持续推进的技术原型**阶段。后续推进以规则正确性与可复现性优先。
 
+## 最近一轮更新（市场 rarity copies 落地）
+
+- 市场供给已从 singleton 结构升级为“按 rarity 复制数量”的真实供给：
+  - `common -> 5` 份
+  - `uncommon -> 3` 份
+  - `rare -> 2` 份
+- 生效路径：`GameRoom` 在构造 `laneDefinitions` 时，先按 `rarity` 扩展 `cardIds`，再交给 `createMarketState` 洗牌并生成三栏槽位/牌堆。
+- 三栏市场、购买补位、牌堆耗尽置空等既有逻辑保持不变。
+- 兼容策略（用于旧字段/旧内容）：
+  - `mid -> uncommon`
+  - `elite / higher -> rare`
+  - rarity 缺失或未知值默认按 `common`（避免历史数据直接崩溃）
+- 本轮未做大规则改版，仅完成供给结构升级与最小稳定化验证。
+
 ## 最近一轮更新（starter / fixed supplies / pressure）
 
 - `data/rulesets/core-v1.json` 的 starter 组成已调整为：
