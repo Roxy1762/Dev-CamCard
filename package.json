@@ -8,7 +8,8 @@
     "build": "pnpm -r run build",
     "test": "pnpm -r --if-present run test",
     "typecheck": "pnpm -r run typecheck",
-    "lint": "pnpm -r --if-present run lint"
+    "lint": "pnpm -r --if-present run lint",
+    "generate:card-catalog": "node scripts/generate-card-catalog.mjs"
   },
   "engines": {
     "node": ">=20",
