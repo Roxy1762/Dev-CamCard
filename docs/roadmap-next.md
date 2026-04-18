@@ -31,8 +31,9 @@
 ## P1：市场与平衡
 
 ### P1-1 市场供给从 singleton 向 rarity copies 过渡
-- 引入基于稀有度的拷贝数配置。
-- 保持 lane identity 的同时增强供给稳定性。
+- ✅ 已完成基础落地：市场构造按 rarity 复制供给（`common=5`、`uncommon=3`、`rare=2`）。
+- ✅ rarity 已从“文案标签”升级为“供给结构输入”，并保持三栏与补位链路不变。
+- 后续仅做小步校准：观察牌堆厚度与轮转速度，必要时微调初始展示/补位顺序（不做大改版）。
 
 ### P1-2 starter / fixed supplies / pressure 结构性重做
 - ✅ 已完成第一轮：starter 调整为 5/3/2/2，fixed supplies 分工重构为经济/生存/牌质修复，pressure 默认改为进入弃牌堆。

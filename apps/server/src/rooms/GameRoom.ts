@@ -11,6 +11,7 @@ import {
   toPrivatePlayerView,
   createSeededRng,
   hashStringToSeed,
+  resolveMarketCopiesByRarity,
 } from "@dev-camcard/engine";
 import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef, SeededRng } from "@dev-camcard/engine";
 import {
@@ -90,7 +91,10 @@ function buildLaneDefinitions(
   for (const rule of rules) {
     const lane = rule.lane;
     if (lane in byLane) {
-      byLane[lane].push(rule.id);
+      const copies = resolveMarketCopiesByRarity((rule as { rarity?: string }).rarity);
+      for (let i = 0; i < copies; i++) {
+        byLane[lane].push(rule.id);
+      }
     }
   }
 
