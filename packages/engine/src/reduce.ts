@@ -138,7 +138,9 @@ function reduceInner(
       }
       const baseCost = config.getCardCost(player.reservedCard.cardId);
       const cost = Math.max(0, baseCost - 1);
-      return buyReservedCard(state, side, cost);
+      let newState = buyReservedCard(state, side, cost);
+      newState = applyBuyFlag(newState, side);
+      return newState;
     }
 
     case CMD.ASSIGN_ATTACK:
