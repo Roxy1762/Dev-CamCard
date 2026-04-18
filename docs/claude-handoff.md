@@ -30,6 +30,17 @@
   - `packages/engine/src/__tests__/determinism.test.ts`（5 条，最小可复现性验证）
   - `packages/schemas/src/__tests__/effect-schema.test.ts`（6 条，聚焦 schema 收紧）
 
+## 最近一轮更新（12 张机制牌接通）
+
+- 围绕“安排 / 预约 / 场馆 / 压力”新增的 12 张机制牌完成一次可玩性梳理，确认其核心依赖链路均已接通：
+  - `hasScheduledCard`：`red_morning_run_checklist` / `red_closed_gym_training` / `blue_review_outline` / `blue_topic_defense`
+  - `hasReservedCard`：`blue_after_class_makeup_log` / `red_preselection_application`
+  - `hasVenue`：`white_student_council_meeting` / `white_school_rules_briefing`
+  - 其余直接机制：`red_tournament_countdown`（安排）、`white_counseling_room`（场馆）、`blue_course_grab_plugin`（setFlag）、`white_makeup_procedure`（trash+heal）
+- 补齐高杠杆小缺口：`setFlag(nextBoughtCardToDeckTop)` 现在同样作用于 `BUY_RESERVED_CARD`，使“预约购买”也能吃到置顶收益。
+- 新增聚焦测试文件 `packages/engine/src/__tests__/mechanic-pack-bridge.test.ts`（5 条）：
+  - 覆盖 5 张新增机制牌的真实行为路径（条件触发、gainFaceUpCard 选择、预约购买吃 flag）。
+
 ## 1. 当前基线与对齐原则
 
 - 项目基线：以 `main` 分支代码语义为准。
