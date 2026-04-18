@@ -14,12 +14,12 @@
         "trigger": "onPlay",
         "effects": [
           {
-            "op": "gainResource",
+            "op": "heal",
             "amount": 1
           },
           {
-            "op": "draw",
-            "count": 1
+            "op": "gainBlock",
+            "amount": 1
           }
         ]
       }
@@ -45,7 +45,7 @@
             "amount": 2
           },
           {
-            "op": "heal",
+            "op": "gainBlock",
             "amount": 1
           }
         ]
@@ -68,8 +68,9 @@
         "trigger": "onPlay",
         "effects": [
           {
-            "op": "gainResource",
-            "amount": 3
+            "op": "drawThenDiscard",
+            "drawCount": 2,
+            "discardCount": 1
           }
         ]
       }

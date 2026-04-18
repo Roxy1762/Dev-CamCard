@@ -10,14 +10,14 @@
     "fixedSupply": true,
     "tags": [],
     "text": {
-      "body": "获得 1 资源，摸 1 张牌。"
+      "body": "回复 1 生命，获得 1 防备。"
     },
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
-          { "op": "gainResource", "amount": 1 },
-          { "op": "draw", "count": 1 }
+          { "op": "heal", "amount": 1 },
+          { "op": "gainBlock", "amount": 1 }
         ]
       }
     ]
@@ -33,14 +33,14 @@
     "fixedSupply": true,
     "tags": [],
     "text": {
-      "body": "获得 2 资源，回复 1 生命。"
+      "body": "获得 2 资源，获得 1 防备。"
     },
     "abilities": [
       {
         "trigger": "onPlay",
         "effects": [
           { "op": "gainResource", "amount": 2 },
-          { "op": "heal", "amount": 1 }
+          { "op": "gainBlock", "amount": 1 }
         ]
       }
     ]
@@ -56,12 +56,12 @@
     "fixedSupply": true,
     "tags": [],
     "text": {
-      "body": "获得 3 资源。"
+      "body": "抽 2 张牌，然后弃 1 张牌。"
     },
     "abilities": [
       {
         "trigger": "onPlay",
-        "effects": [{ "op": "gainResource", "amount": 3 }]
+        "effects": [{ "op": "drawThenDiscard", "drawCount": 2, "discardCount": 1 }]
       }
     ]
   }

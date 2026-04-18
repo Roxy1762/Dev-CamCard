@@ -4,15 +4,15 @@
   "cards": {
     "supply_errand_runner": {
       "name": "Errand Runner",
-      "body": "Gain 1 resource. Draw 1 card."
+      "body": "Heal 1 HP. Gain 1 block."
     },
     "supply_milk_bread": {
       "name": "Milk Bread",
-      "body": "Gain 2 resources. Heal 1 HP."
+      "body": "Gain 2 resources. Gain 1 block."
     },
     "supply_print_materials": {
       "name": "Print Materials",
-      "body": "Gain 3 resources."
+      "body": "Draw 2 cards, then discard 1."
     }
   }
 }

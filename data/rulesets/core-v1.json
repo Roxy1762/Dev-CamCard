@@ -11,10 +11,10 @@
   "marketLanesCount": 3,
   "marketSlotsPerLane": 2,
   "starterDeck": [
-    { "cardId": "starter_allowance", "count": 7 },
+    { "cardId": "starter_allowance", "count": 5 },
     { "cardId": "starter_quarrel", "count": 3 },
-    { "cardId": "starter_draft_paper", "count": 1 },
-    { "cardId": "starter_punctuality", "count": 1 }
+    { "cardId": "starter_draft_paper", "count": 2 },
+    { "cardId": "starter_punctuality", "count": 2 }
   ],
   "fixedSupplies": [
     "supply_errand_runner",

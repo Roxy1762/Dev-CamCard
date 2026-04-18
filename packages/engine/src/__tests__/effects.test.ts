@@ -40,6 +40,7 @@ function makeState(
   p0?: Partial<InternalPlayerState>,
   p1?: Partial<InternalPlayerState>
 ): InternalMatchState {
+  const { pendingChoice, ...restOverrides } = overrides;
   return {
     roomId: "room-1",
     rulesetId: "core-v1",
@@ -55,7 +56,8 @@ function makeState(
     started: true,
     ended: false,
     winner: null,
-    ...overrides,
+    ...restOverrides,
+    pendingChoice: pendingChoice ?? null,
   };
 }
 
@@ -154,7 +156,7 @@ describe("applyEffects: createPressure (自我级别跳过)", () => {
 // ── applyStateEffects — createPressure ───────────────────────────────────────
 
 describe("applyStateEffects: createPressure", () => {
-  it("createPressure target=opponent 将压力牌加入对手手牌", () => {
+  it("createPressure target=opponent 默认将压力牌加入对手弃牌堆", () => {
     const state = makeState();
     const result = applyStateEffects(
       state,
@@ -165,16 +167,16 @@ describe("applyStateEffects: createPressure", () => {
       seqId
     );
 
-    // 对手（side=1）手牌应有 2 张 status_pressure
-    const oppHand = result.players[1].hand;
-    expect(oppHand).toHaveLength(2);
-    expect(oppHand[0].cardId).toBe("status_pressure");
-    expect(oppHand[1].cardId).toBe("status_pressure");
+    // 对手（side=1）弃牌堆应有 2 张 status_pressure
+    const oppDiscard = result.players[1].discard;
+    expect(oppDiscard).toHaveLength(2);
+    expect(oppDiscard[0].cardId).toBe("status_pressure");
+    expect(oppDiscard[1].cardId).toBe("status_pressure");
     // 每张实例 ID 唯一
-    expect(oppHand[0].instanceId).not.toBe(oppHand[1].instanceId);
+    expect(oppDiscard[0].instanceId).not.toBe(oppDiscard[1].instanceId);
   });
 
-  it("createPressure target=self 将压力牌加入自己手牌", () => {
+  it("createPressure target=self 默认将压力牌加入自己弃牌堆", () => {
     const state = makeState();
     const result = applyStateEffects(
       state,
@@ -185,8 +187,8 @@ describe("applyStateEffects: createPressure", () => {
       seqId
     );
 
-    expect(result.players[0].hand).toHaveLength(1);
-    expect(result.players[0].hand[0].cardId).toBe("status_pressure");
+    expect(result.players[0].discard).toHaveLength(1);
+    expect(result.players[0].discard[0].cardId).toBe("status_pressure");
     // 对手不受影响
     expect(result.players[1].hand).toHaveLength(0);
   });
@@ -206,8 +208,8 @@ describe("applyStateEffects: createPressure", () => {
     );
 
     expect(result.players[0].resourcePool).toBe(5);
-    expect(result.players[1].hand).toHaveLength(1);
-    expect(result.players[1].hand[0].cardId).toBe("status_pressure");
+    expect(result.players[1].discard).toHaveLength(1);
+    expect(result.players[1].discard[0].cardId).toBe("status_pressure");
   });
 
   it("createPressure 给双方（finals week 场景）", () => {
@@ -224,10 +226,10 @@ describe("applyStateEffects: createPressure", () => {
       seqId
     );
 
-    // 对手得 2 压力
-    expect(result.players[1].hand).toHaveLength(2);
-    // 自己得 1 压力
-    expect(result.players[0].hand).toHaveLength(1);
+    // 对手得 2 压力（进入弃牌）
+    expect(result.players[1].discard).toHaveLength(2);
+    // 自己得 1 压力（进入弃牌）
+    expect(result.players[0].discard).toHaveLength(1);
   });
 });
 

@@ -35,9 +35,8 @@
 - 保持 lane identity 的同时增强供给稳定性。
 
 ### P1-2 starter / fixed supplies / pressure 结构性重做
-- 重设 starter 的节奏与基础资源曲线。
-- 重做 fixed supplies 的“通用解法”与中期过渡定位。
-- 调整 pressure 生成与清理节奏，避免负反馈失控。
+- ✅ 已完成第一轮：starter 调整为 5/3/2/2，fixed supplies 分工重构为经济/生存/牌质修复，pressure 默认改为进入弃牌堆。
+- 下一步：基于对局数据继续微调 cost 与数值，观察中期购买密度与压力税感是否过强/过弱。
 
 ### P1-3 平衡验证与观测
 - 补充对局级指标（回合时长、平均伤害、购买分布）。

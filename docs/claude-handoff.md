@@ -1,6 +1,23 @@
-# Claude 交接文档（2026-04-16 校准版）
+# Claude 交接文档（2026-04-18 结构重做版）
 
 > 当前项目已从“概念验证”进入**可持续推进的技术原型**阶段。后续推进以规则正确性与可复现性优先。
+
+## 最近一轮更新（starter / fixed supplies / pressure）
+
+- `data/rulesets/core-v1.json` 的 starter 组成已调整为：
+  - `starter_allowance x5`
+  - `starter_quarrel x3`
+  - `starter_draft_paper x2`
+  - `starter_punctuality x2`
+- fixed supplies 三堆已按职责重写：
+  - 经济：`supply_milk_bread`（2 资源 + 1 防备）
+  - 生存：`supply_errand_runner`（回复 1 + 1 防备）
+  - 牌质修复：`supply_print_materials`（抽 2 弃 1）
+- 压力规则已改为默认进入弃牌堆（`createPressure` 不再直接把压力放进手牌），仍保留：
+  - 压力抽到手后不可打出
+  - 回合结束会随手牌一起弃置
+- 本轮“与建议略有不同”的最小调整说明：
+  - 生存补给使用了“治疗 + 防备”的双轻量组合，而非单纯治疗，目的是让防守收益不依赖单一生命恢复来源。
 
 ## 最近一轮更新（RNG + Schema 收口）
 

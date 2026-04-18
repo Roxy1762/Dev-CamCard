@@ -19,12 +19,12 @@ const RULESET: RulesetConfig = {
   marketLanesCount: 3,
   marketSlotsPerLane: 2,
   starterDeck: [
-    { cardId: "starter_allowance", count: 7 },
+    { cardId: "starter_allowance", count: 5 },
     { cardId: "starter_quarrel", count: 3 },
-    { cardId: "starter_draft_paper", count: 1 },
-    { cardId: "starter_punctuality", count: 1 },
+    { cardId: "starter_draft_paper", count: 2 },
+    { cardId: "starter_punctuality", count: 2 },
   ],
-  fixedSupplies: ["supply_errand_runner", "supply_milk_bread"],
+  fixedSupplies: ["supply_errand_runner", "supply_milk_bread", "supply_print_materials"],
 };
 
 const CARD_COSTS: Record<string, number> = {
@@ -32,6 +32,7 @@ const CARD_COSTS: Record<string, number> = {
   starter_quarrel: 0,
   supply_errand_runner: 3,
   supply_milk_bread: 2,
+  supply_print_materials: 4,
   market_card_1: 4,
 };
 
@@ -72,8 +73,8 @@ const CARD_DEFS: Record<string, CardDef> = {
       {
         trigger: "onPlay",
         effects: [
-          { op: "gainResource", amount: 1 },
-          { op: "draw", count: 1 },
+          { op: "heal", amount: 1 },
+          { op: "gainBlock", amount: 1 },
         ],
       },
     ],
@@ -86,10 +87,26 @@ const CARD_DEFS: Record<string, CardDef> = {
         trigger: "onPlay",
         effects: [
           { op: "gainResource", amount: 2 },
-          { op: "heal", amount: 1 },
+          { op: "gainBlock", amount: 1 },
         ],
       },
     ],
+  },
+  supply_print_materials: {
+    id: "supply_print_materials",
+    type: "action",
+    abilities: [
+      {
+        trigger: "onPlay",
+        effects: [{ op: "drawThenDiscard", drawCount: 2, discardCount: 1 }],
+      },
+    ],
+  },
+  status_pressure: {
+    id: "status_pressure",
+    type: "action",
+    isPressure: true,
+    abilities: [],
   },
   // 用于测试 drawThenDiscard
   test_draw_then_discard: {
@@ -189,6 +206,14 @@ describe("reduce: READY", () => {
     const totalCards = 12;
     expect(s2.players[0].deck).toHaveLength(totalCards - RULESET.firstPlayerOpeningHand);
     expect(s2.players[1].deck).toHaveLength(totalCards - RULESET.secondPlayerOpeningHand);
+  });
+
+  it("starter 构成符合 5/3/2/2", () => {
+    const starterMap = new Map(RULESET.starterDeck.map((entry) => [entry.cardId, entry.count]));
+    expect(starterMap.get("starter_allowance")).toBe(5);
+    expect(starterMap.get("starter_quarrel")).toBe(3);
+    expect(starterMap.get("starter_draft_paper")).toBe(2);
+    expect(starterMap.get("starter_punctuality")).toBe(2);
   });
 
   it("开局后先手回合为 side=0", () => {
@@ -305,6 +330,22 @@ describe("reduce: BUY_FIXED_SUPPLY", () => {
     expect(result.players[0].discard).toHaveLength(1);
     expect(result.players[0].discard[0].cardId).toBe("supply_errand_runner");
     expect(result.players[0].resourcePool).toBe(7); // 10 - 3
+  });
+
+  it("可购买 fixed supply: supply_print_materials", () => {
+    const state = stateWithResources();
+    const result = reduce(
+      state,
+      0,
+      { type: "BUY_FIXED_SUPPLY", cardId: "supply_print_materials" },
+      CONFIG,
+      deterministicRandom,
+      genId
+    );
+
+    expect(result.players[0].discard).toHaveLength(1);
+    expect(result.players[0].discard[0].cardId).toBe("supply_print_materials");
+    expect(result.players[0].resourcePool).toBe(6); // 10 - 4
   });
 
   it("cardId 不在 fixedSupplies 时抛出错误", () => {
@@ -472,6 +513,13 @@ describe("reduce: PLAY_CARD", () => {
     expect(() =>
       reduce(state, 1, { type: "PLAY_CARD", instanceId: "test-card-inst" }, CONFIG)
     ).toThrow();
+  });
+
+  it("压力牌抽到手后仍不可打出", () => {
+    const state = stateWithCardInHand("status_pressure", "pressure-inst");
+    expect(() =>
+      reduce(state, 0, { type: "PLAY_CARD", instanceId: "pressure-inst" }, CONFIG)
+    ).toThrow("压力牌不可打出");
   });
 });
 
