@@ -54,6 +54,7 @@ function makeState(
   p0?: Partial<InternalPlayerState>,
   p1?: Partial<InternalPlayerState>
 ): InternalMatchState {
+  const { pendingChoice, ...restOverrides } = overrides;
   return {
     roomId: "room-1",
     rulesetId: "core-v1",
@@ -66,7 +67,8 @@ function makeState(
     started: true,
     ended: false,
     winner: null,
-    ...overrides,
+    ...restOverrides,
+    pendingChoice: pendingChoice ?? null,
   };
 }
 

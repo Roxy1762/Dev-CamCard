@@ -4,15 +4,15 @@
   "cards": {
     "supply_errand_runner": {
       "name": "跑腿侠",
-      "body": "获得 1 资源，摸 1 张牌。"
+      "body": "回复 1 生命，获得 1 防备。"
     },
     "supply_milk_bread": {
       "name": "牛奶面包",
-      "body": "获得 2 资源，回复 1 生命。"
+      "body": "获得 2 资源，获得 1 防备。"
     },
     "supply_print_materials": {
       "name": "打印材料",
-      "body": "获得 3 资源。"
+      "body": "抽 2 张牌，然后弃 1 张牌。"
     }
   }
 }

@@ -246,6 +246,17 @@ describe("首批数据文件校验", () => {
     expect(total).toBe(12); // game-rules.md: 起始套牌 12 张
   });
 
+  it("core-v1 starter deck 构成 = 5/3/2/2", () => {
+    const ruleset = loadJson("data/rulesets/core-v1.json") as {
+      starterDeck: Array<{ cardId: string; count: number }>;
+    };
+    const starterMap = new Map(ruleset.starterDeck.map((entry) => [entry.cardId, entry.count]));
+    expect(starterMap.get("starter_allowance")).toBe(5);
+    expect(starterMap.get("starter_quarrel")).toBe(3);
+    expect(starterMap.get("starter_draft_paper")).toBe(2);
+    expect(starterMap.get("starter_punctuality")).toBe(2);
+  });
+
   it("所有 starter card ID 与 card-catalog.md 一致", () => {
     const EXPECTED_STARTER_IDS = [
       "starter_allowance",

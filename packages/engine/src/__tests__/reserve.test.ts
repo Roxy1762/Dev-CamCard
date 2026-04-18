@@ -49,6 +49,7 @@ function makeMarket(
 }
 
 function makeState(overrides: Partial<InternalMatchState> = {}): InternalMatchState {
+  const { pendingChoice, ...restOverrides } = overrides;
   return {
     roomId: "room-1",
     rulesetId: "core-v1",
@@ -61,7 +62,8 @@ function makeState(overrides: Partial<InternalMatchState> = {}): InternalMatchSt
     started: true,
     ended: false,
     winner: null,
-    ...overrides,
+    ...restOverrides,
+    pendingChoice: pendingChoice ?? null,
   };
 }
 

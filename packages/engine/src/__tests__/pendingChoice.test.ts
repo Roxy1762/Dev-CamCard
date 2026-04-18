@@ -88,7 +88,10 @@ describe("trashFromHandOrDiscard — pendingChoice 产生", () => {
     expect(result.pendingChoice).not.toBeNull();
     expect(result.pendingChoice!.type).toBe("chooseCardsFromHandOrDiscard");
     expect(result.pendingChoice!.forSide).toBe(0);
-    expect(result.pendingChoice!.maxCount).toBe(1);
+    if (!result.pendingChoice || result.pendingChoice.type !== "chooseCardsFromHandOrDiscard") {
+      throw new Error("expected chooseCardsFromHandOrDiscard pendingChoice");
+    }
+    expect(result.pendingChoice.maxCount).toBe(1);
   });
 
   it("zone=hand → chooseCardsFromHand", () => {

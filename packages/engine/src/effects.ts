@@ -28,7 +28,7 @@ export type CardEffect =
    * drawCount 与 discardCount 可以不同（如抽 2 弃 1 即“过滤”效果）。
    */
   | { op: "drawThenDiscard"; drawCount: number; discardCount: number }
-  /** 给指定目标（默认对手）产生压力牌（status_pressure）到其手牌 */
+  /** 给指定目标（默认对手）产生压力牌（status_pressure）到其弃牌堆 */
   | { op: "createPressure"; count: number; target?: "opponent" | "self" }
   /**
    * 预习：查看牌堆顶 N 张。
@@ -865,7 +865,7 @@ function applySingleStateEffect(
     const targetPlayer = state.players[targetSide];
     const updatedTarget: InternalPlayerState = {
       ...targetPlayer,
-      hand: [...targetPlayer.hand, ...pressureCards],
+      discard: [...targetPlayer.discard, ...pressureCards],
     };
     return mergePlayer(state, targetSide, updatedTarget);
   }

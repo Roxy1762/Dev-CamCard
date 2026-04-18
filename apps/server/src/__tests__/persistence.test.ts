@@ -14,6 +14,8 @@ import express from "express";
 import { getPrisma, closePrisma } from "../prisma";
 import { Prisma } from "@prisma/client";
 
+const HAS_DATABASE_URL = Boolean(process.env.DATABASE_URL || process.env.POSTGRES_URL);
+
 // ── 测试用 matchId ──────────────────────────────────────────────────────────
 const TEST_MATCH_ID = `test-persist-${Date.now()}`;
 
@@ -59,7 +61,7 @@ function buildTestApp() {
 
 // ── 测试 ─────────────────────────────────────────────────────────────────────
 
-describe("Prisma 持久化 & 只读 API", () => {
+describe.skipIf(!HAS_DATABASE_URL)("Prisma 持久化 & 只读 API", () => {
   afterAll(async () => {
     // 清理测试数据
     const prisma = getPrisma();

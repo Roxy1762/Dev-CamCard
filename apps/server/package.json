@@ -6,8 +6,8 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "typecheck": "prisma generate && tsc --noEmit",
+    "test": "prisma generate && vitest run"
   },
   "dependencies": {
     "@colyseus/schema": "^2.0.30",
