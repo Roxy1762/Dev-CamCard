@@ -122,6 +122,54 @@ const CARD_DEFS: Record<string, CardDef> = {
       { trigger: "onScheduleResolve", effects: [{ op: "gainAttack", amount: 3 }] },
     ],
   },
+  red_morning_run_checklist: {
+    id: "red_morning_run_checklist",
+    type: "action",
+    abilities: [
+      { trigger: "onPlay", effects: [{ op: "gainAttack", amount: 1 }] },
+      {
+        trigger: "onPlay",
+        condition: { type: "hasScheduledCard" },
+        effects: [{ op: "gainAttack", amount: 2 }],
+      },
+    ],
+  },
+  blue_after_class_makeup_log: {
+    id: "blue_after_class_makeup_log",
+    type: "action",
+    abilities: [
+      { trigger: "onPlay", effects: [{ op: "draw", count: 1 }] },
+      {
+        trigger: "onPlay",
+        condition: { type: "hasReservedCard" },
+        effects: [{ op: "gainResource", amount: 1 }],
+      },
+    ],
+  },
+  white_student_council_meeting: {
+    id: "white_student_council_meeting",
+    type: "action",
+    abilities: [
+      { trigger: "onPlay", effects: [{ op: "gainBlock", amount: 1 }] },
+      {
+        trigger: "onPlay",
+        condition: { type: "hasVenue" },
+        effects: [{ op: "queueDelayedDiscard", count: 1, target: "opponent" }],
+      },
+    ],
+  },
+  blue_topic_defense: {
+    id: "blue_topic_defense",
+    type: "action",
+    abilities: [
+      { trigger: "onPlay", effects: [{ op: "draw", count: 2 }] },
+      {
+        trigger: "onPlay",
+        condition: { type: "hasScheduledCard" },
+        effects: [{ op: "gainFaceUpCard", maxCost: 3, destination: "deckTop" }],
+      },
+    ],
+  },
 };
 
 const CONFIG: EngineConfig = {
@@ -719,6 +767,89 @@ describe("reduce: PUT_CARD_TO_SCHEDULE", () => {
     expect(state.players[0].scheduleSlots[0]).toBeNull();
     expect(state.players[0].attackPool).toBe(3);
     expect(state.players[0].discard.some((c) => c.instanceId === "sc-inst")).toBe(true);
+  });
+});
+
+describe("reduce: 新增 12 张机制牌（最小可玩性）", () => {
+  function stateWithHandCard(
+    cardId: string,
+    overrides: Partial<InternalPlayerState> = {}
+  ): InternalMatchState {
+    const base = startedState();
+    const handCard: CardInstance = { instanceId: "new-card-inst", cardId };
+    const players: [InternalPlayerState, InternalPlayerState] = [
+      { ...base.players[0], hand: [handCard], ...overrides },
+      base.players[1],
+    ];
+    return { ...base, players };
+  }
+
+  it("red_morning_run_checklist：有日程牌时额外获得攻击", () => {
+    const schedCard: CardInstance = { instanceId: "sched-1", cardId: "test_schedule_combo" };
+    const state = stateWithHandCard("red_morning_run_checklist", {
+      scheduleSlots: [schedCard, null],
+    });
+
+    const result = reduce(state, 0, { type: "PLAY_CARD", instanceId: "new-card-inst" }, CONFIG, deterministicRandom, genId);
+    expect(result.players[0].attackPool).toBe(3);
+  });
+
+  it("blue_after_class_makeup_log：有预约牌时获得额外资源", () => {
+    const reserved: CardInstance = { instanceId: "rv-1", cardId: "market_card_1" };
+    const state = stateWithHandCard("blue_after_class_makeup_log", {
+      reservedCard: reserved,
+      reservedCardTurn: 1,
+      resourcePool: 0,
+      deck: [{ instanceId: "draw-1", cardId: "starter_quarrel" }],
+    });
+
+    const result = reduce(state, 0, { type: "PLAY_CARD", instanceId: "new-card-inst" }, CONFIG, deterministicRandom, genId);
+    expect(result.players[0].resourcePool).toBe(1);
+    expect(result.players[0].hand).toHaveLength(1);
+  });
+
+  it("white_student_council_meeting：有场馆时给对手挂 delayed discard", () => {
+    const venue: import("../types").VenueState = {
+      instanceId: "my-venue",
+      cardId: "test_guard_venue",
+      owner: 0,
+      isGuard: true,
+      durability: 4,
+      maxDurability: 4,
+      activationsLeft: 0,
+      activationsPerTurn: 1,
+    };
+    const state = stateWithHandCard("white_student_council_meeting", {
+      venues: [venue],
+    });
+
+    const result = reduce(state, 0, { type: "PLAY_CARD", instanceId: "new-card-inst" }, CONFIG, deterministicRandom, genId);
+    expect(result.players[0].block).toBe(1);
+    expect(result.players[1].pendingDiscardCount).toBe(1);
+  });
+
+  it("blue_topic_defense：有日程牌时触发 gainFaceUpCard 选择", () => {
+    const schedCard: CardInstance = { instanceId: "sched-2", cardId: "test_schedule_combo" };
+    const marketCard: CardInstance = { instanceId: "market-cheap", cardId: "market_b" };
+    const state = {
+      ...stateWithHandCard("blue_topic_defense", {
+        scheduleSlots: [schedCard, null],
+        deck: [{ instanceId: "draw-a", cardId: "starter_allowance" }, { instanceId: "draw-b", cardId: "starter_quarrel" }],
+      }),
+      market: [
+        { lane: "course", slots: [marketCard, null], deck: [] },
+        { lane: "activity", slots: [null, null], deck: [] },
+        { lane: "daily", slots: [null, null], deck: [] },
+      ] as InternalMatchState["market"],
+    };
+
+    const result = reduce(state, 0, { type: "PLAY_CARD", instanceId: "new-card-inst" }, CONFIG, deterministicRandom, genId);
+    expect(result.players[0].hand).toHaveLength(2); // 先摸 2
+    expect(result.pendingChoice?.type).toBe("gainFaceUpCardDecision");
+    if (result.pendingChoice?.type === "gainFaceUpCardDecision") {
+      expect(result.pendingChoice.destination).toBe("deckTop");
+      expect(result.pendingChoice.candidates.map((c) => c.instanceId)).toContain("market-cheap");
+    }
   });
 });
 

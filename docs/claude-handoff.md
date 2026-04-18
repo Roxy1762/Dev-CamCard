@@ -30,6 +30,16 @@
   - `packages/engine/src/__tests__/determinism.test.ts`（5 条，最小可复现性验证）
   - `packages/schemas/src/__tests__/effect-schema.test.ts`（6 条，聚焦 schema 收紧）
 
+## 最近一轮更新（12 张机制牌接通：安排/预约/场馆/压力）
+
+- 上一轮新增的 12 张机制牌已从“仅数据存在”推进到“引擎主链可玩”：
+  - `hasScheduledCard` / `hasReservedCard` / `hasVenue` 条件在 `onPlay` / `onActivate` / `onScheduleResolve` 的执行路径已被实际覆盖。
+  - `gainFaceUpCard`（含 `destination=deckTop`）在新增牌的触发链路上可进入 pending-choice 并继续结算。
+- 修复高杠杆缺口：`nextBoughtCardToDeckTop` 现已对 `BUY_RESERVED_CARD` 生效（此前仅对市场/固定补给购买生效）。
+- 新增聚焦测试（非大而全）：
+  - 4 条新增牌行为测试（晨跑清单 / 课后补录 / 学生会例会 / 专题答辩）。
+  - 1 条通用能力回归（预约购买也吃 `nextBoughtCardToDeckTop`）。
+
 ## 1. 当前基线与对齐原则
 
 - 项目基线：以 `main` 分支代码语义为准。

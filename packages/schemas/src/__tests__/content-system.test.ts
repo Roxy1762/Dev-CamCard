@@ -229,9 +229,9 @@ describe("data/sets/ 文件校验", () => {
     expect(r.valid).toBe(true);
   });
 
-  it("core-v1 包含全部 38 张卡牌（starter+supply+status+market）", () => {
+  it("core-v1 包含全部 50 张卡牌（starter+supply+status+market）", () => {
     const s = loadJson("data/sets/core-v1.json") as { cardIds: string[] };
-    expect(s.cardIds.length).toBe(38);
+    expect(s.cardIds.length).toBe(50);
     expect(s.cardIds).toContain("green_used_book_recycle");
     expect(s.cardIds).toContain("blue_draft_simulation");
     expect(s.cardIds).toContain("green_anniversary_sponsor");
@@ -239,6 +239,9 @@ describe("data/sets/ 文件校验", () => {
     expect(s.cardIds).toContain("green_find_sponsorship");
     expect(s.cardIds).toContain("green_planning_meeting");
     expect(s.cardIds).toContain("neutral_campus_broadcast");
+    expect(s.cardIds).toContain("red_morning_run_checklist");
+    expect(s.cardIds).toContain("blue_course_grab_plugin");
+    expect(s.cardIds).toContain("white_makeup_procedure");
   });
 });
 
@@ -292,6 +295,36 @@ describe("market-core 新增能力牌最小校验", () => {
       op: "chooseTarget",
       targetType: "opponentVenue",
       onChosen: [{ op: "damageVenue", amount: 3 }],
+    });
+  });
+
+  it("blue_course_grab_plugin 使用 setFlag(nextBoughtCardToDeckTop)", () => {
+    const rules = loadMarketRules();
+    const card = rules.find((c) => c.id === "blue_course_grab_plugin");
+    expect(card).toBeDefined();
+    const onPlay = card!.abilities.find((a) => a.trigger === "onPlay");
+    expect(onPlay?.effects).toContainEqual({
+      op: "setFlag",
+      flag: "nextBoughtCardToDeckTop",
+    });
+  });
+
+  it("white_school_rules_briefing 使用 hasVenue 条件触发 createPressure", () => {
+    const rules = loadMarketRules();
+    const card = rules.find((c) => c.id === "white_school_rules_briefing");
+    expect(card).toBeDefined();
+    const conditional = card!.abilities.find(
+      (a) =>
+        a.trigger === "onPlay" &&
+        typeof a.condition === "object" &&
+        a.condition !== null &&
+        "type" in a.condition &&
+        (a.condition as { type?: string }).type === "hasVenue",
+    );
+    expect(conditional?.effects).toContainEqual({
+      op: "createPressure",
+      count: 1,
+      target: "opponent",
     });
   });
 });

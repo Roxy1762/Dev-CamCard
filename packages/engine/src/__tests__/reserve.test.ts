@@ -314,6 +314,23 @@ describe("reduce: RESERVE_MARKET_CARD + BUY_RESERVED_CARD (集成)", () => {
     expect(state.players[0].resourcePool).toBe(4); // 7 - 3
   });
 
+  it("BUY_RESERVED_CARD 会消耗 nextBoughtCardToDeckTop 并将购买牌置于牌库顶", () => {
+    const shopCard = card("market_a", "shop-flag-1");
+    let state = makeState({
+      turnNumber: 1,
+      market: makeMarket(shopCard),
+      players: [makePlayer(0, { resourcePool: 8, activeFlags: ["nextBoughtCardToDeckTop"] }), makePlayer(1)],
+    });
+
+    state = reduce(state, 0, { type: "RESERVE_MARKET_CARD", instanceId: "shop-flag-1" }, CONFIG, () => 0, seqId);
+    state = { ...state, turnNumber: 2 };
+    state = reduce(state, 0, { type: "BUY_RESERVED_CARD" }, CONFIG, () => 0, seqId);
+
+    expect(state.players[0].deck[0]).toMatchObject({ instanceId: "shop-flag-1", cardId: "market_a" });
+    expect(state.players[0].discard.find((c) => c.instanceId === "shop-flag-1")).toBeUndefined();
+    expect(state.players[0].activeFlags).not.toContain("nextBoughtCardToDeckTop");
+  });
+
   it("RESERVE_MARKET_CARD 同回合直接 BUY_RESERVED_CARD 失败", () => {
     const shopCard = card("market_a", "shop-int-2");
     const state = makeState({

@@ -23,6 +23,8 @@
 ### 4) 选择与效果系统
 - `chooseTarget`、`gainFaceUpCard`、交互 `scry`、`trashFromHandOrDiscard` 已接入。
 - `queueDelayedDiscard` 与回合开始结算可运行。
+- `nextBoughtCardToDeckTop` 已覆盖公开购买 / 固定补给购买 / 预约购买三条购买链路。
+- 新增 12 张机制牌所依赖的三类条件（`hasScheduledCard` / `hasReservedCard` / `hasVenue`）已在引擎主流程验证可用。
 
 ### 5) 联机与持久化
 - 断线重连（60 秒）可用。
@@ -66,7 +68,7 @@
 - starter 已调整为 5/3/2/2（allowance/quarrel/draft_paper/punctuality），起手曲线较旧版更平滑。
 - fixed supplies 已重构为三类明确职责：经济（`supply_milk_bread`）、生存（`supply_errand_runner`）、牌质修复（`supply_print_materials`）。
 - pressure 生成默认进入弃牌堆（不再直接进手牌）；压力抽到手后仍不可打出，且回合结束照常弃置。
-- 核心机制牌包（安排 / 预约 / 场馆 / 压力）尚未形成完整玩法主轴，仍待后续扩充。
+- 核心机制牌包（安排 / 预约 / 场馆 / 压力）已完成第一轮“可玩性接通”，但体系强度与购买优先级仍需继续平衡。
 
 ### 5) 工具与产品化
 - ReplayScene 仍是骨架（以事件列表为主），非完整复盘播放器。
