@@ -249,6 +249,11 @@ describe("market-core 新增能力牌最小校验", () => {
   function loadMarketRules() {
     return loadCardRuleFile(DATA_ROOT, "data/cards/rules/market-core.json");
   }
+  function hasConditionType(value: unknown, type: string): boolean {
+    if (!value || typeof value !== "object") return false;
+    if (!("type" in value)) return false;
+    return (value as { type?: unknown }).type === type;
+  }
 
   it("green_find_sponsorship 使用 gainFaceUpCard（maxCost=3，discard）", () => {
     const rules = loadMarketRules();
@@ -314,12 +319,7 @@ describe("market-core 新增能力牌最小校验", () => {
     const card = rules.find((c) => c.id === "white_school_rules_briefing");
     expect(card).toBeDefined();
     const conditional = card!.abilities.find(
-      (a) =>
-        a.trigger === "onPlay" &&
-        typeof a.condition === "object" &&
-        a.condition !== null &&
-        "type" in a.condition &&
-        (a.condition as { type?: string }).type === "hasVenue",
+      (a) => a.trigger === "onPlay" && hasConditionType(a.condition, "hasVenue"),
     );
     expect(conditional?.effects).toContainEqual({
       op: "createPressure",
