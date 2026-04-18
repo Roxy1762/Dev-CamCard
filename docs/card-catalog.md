@@ -68,3 +68,9 @@
 
 - 本轮先冻结 ID，不在此文件中展开全文卡面。
 - 完整卡面文案后续放在 `data/cards/*.json`，但不得改动既有 ID。
+
+## 与自动生成目录的关系
+
+- `docs/card-catalog.generated.md` 是自动生成文件：由 `data/cards/rules/*.json`（规则真源）和 `data/cards/text/zh-CN/*.json`（中文文案）合并生成。
+- 本文件（`docs/card-catalog.md`）继续作为“ID 冻结与人工说明”文档，不承载完整卡面字段展开。
+- 当规则数据或中文文案变更时，执行 `pnpm generate:card-catalog` 更新 generated 文件，避免文档与数据漂移。
