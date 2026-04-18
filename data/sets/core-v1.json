@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
   "id": "core-v1",
-  "contentVersion": 1,
+  "contentVersion": 2,
   "name": "核心牌组第一版",
-  "description": "首发核心集，包含起始套牌、固定补给、状态牌及 30 张市场牌。",
+  "description": "首发核心集，包含起始套牌、固定补给、状态牌及 42 张市场牌。",
   "cardIds": [
     "starter_allowance",
     "starter_quarrel",
@@ -42,6 +42,18 @@
     "neutral_convenience_snack",
     "neutral_library_closing",
     "neutral_seat_swap",
-    "neutral_campus_broadcast"
+    "neutral_campus_broadcast",
+    "red_morning_run_checklist",
+    "red_tournament_countdown",
+    "red_closed_gym_training",
+    "blue_after_class_makeup_log",
+    "blue_review_outline",
+    "blue_topic_defense",
+    "white_student_council_meeting",
+    "white_counseling_room",
+    "white_school_rules_briefing",
+    "blue_course_grab_plugin",
+    "red_preselection_application",
+    "white_makeup_procedure"
   ]
 }

@@ -913,5 +913,442 @@
       }
     ],
     "artKey": "neutral_campus_broadcast"
+  },
+  {
+    "id": "red_morning_run_checklist",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": [
+      "red",
+      "sport"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 1
+          }
+        ]
+      },
+      {
+        "trigger": "onPlay",
+        "condition": {
+          "type": "hasScheduledCard"
+        },
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 2
+          }
+        ]
+      }
+    ],
+    "artKey": "red_morning_run_checklist"
+  },
+  {
+    "id": "red_tournament_countdown",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "activity",
+    "type": "action",
+    "tags": [
+      "red",
+      "sport"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
+      },
+      {
+        "trigger": "onScheduleResolve",
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 3
+          }
+        ]
+      }
+    ],
+    "artKey": "red_tournament_countdown"
+  },
+  {
+    "id": "red_closed_gym_training",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 6,
+    "rarity": "rare",
+    "lane": "activity",
+    "type": "venue",
+    "isGuard": false,
+    "durability": 5,
+    "activationsPerTurn": 1,
+    "tags": [
+      "red",
+      "sport"
+    ],
+    "abilities": [
+      {
+        "trigger": "onActivate",
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 2
+          }
+        ]
+      },
+      {
+        "trigger": "onActivate",
+        "condition": {
+          "type": "hasScheduledCard"
+        },
+        "effects": [
+          {
+            "op": "gainAttack",
+            "amount": 2
+          }
+        ]
+      }
+    ],
+    "artKey": "red_closed_gym_training"
+  },
+  {
+    "id": "blue_after_class_makeup_log",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "tags": [
+      "blue",
+      "study"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
+      },
+      {
+        "trigger": "onPlay",
+        "condition": {
+          "type": "hasReservedCard"
+        },
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "blue_after_class_makeup_log"
+  },
+  {
+    "id": "blue_review_outline",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 4,
+    "rarity": "uncommon",
+    "lane": "course",
+    "type": "action",
+    "tags": [
+      "blue",
+      "study"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "scry",
+            "count": 3,
+            "interactive": true
+          }
+        ]
+      },
+      {
+        "trigger": "onPlay",
+        "condition": {
+          "type": "hasScheduledCard"
+        },
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "blue_review_outline"
+  },
+  {
+    "id": "blue_topic_defense",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 6,
+    "rarity": "rare",
+    "lane": "course",
+    "type": "action",
+    "tags": [
+      "blue",
+      "study"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "draw",
+            "count": 2
+          }
+        ]
+      },
+      {
+        "trigger": "onPlay",
+        "condition": {
+          "type": "hasScheduledCard"
+        },
+        "effects": [
+          {
+            "op": "gainFaceUpCard",
+            "maxCost": 3,
+            "destination": "deckTop"
+          }
+        ]
+      }
+    ],
+    "artKey": "blue_topic_defense"
+  },
+  {
+    "id": "white_student_council_meeting",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "tags": [
+      "white",
+      "discipline"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainBlock",
+            "amount": 1
+          }
+        ]
+      },
+      {
+        "trigger": "onPlay",
+        "condition": {
+          "type": "hasVenue"
+        },
+        "effects": [
+          {
+            "op": "queueDelayedDiscard",
+            "count": 1,
+            "target": "opponent"
+          }
+        ]
+      }
+    ],
+    "artKey": "white_student_council_meeting"
+  },
+  {
+    "id": "white_counseling_room",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 5,
+    "rarity": "uncommon",
+    "lane": "daily",
+    "type": "venue",
+    "isGuard": true,
+    "durability": 5,
+    "activationsPerTurn": 1,
+    "tags": [
+      "white",
+      "discipline"
+    ],
+    "abilities": [
+      {
+        "trigger": "onActivate",
+        "effects": [
+          {
+            "op": "heal",
+            "amount": 1
+          },
+          {
+            "op": "gainBlock",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "white_counseling_room"
+  },
+  {
+    "id": "white_school_rules_briefing",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 6,
+    "rarity": "rare",
+    "lane": "daily",
+    "type": "action",
+    "tags": [
+      "white",
+      "discipline"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "queueDelayedDiscard",
+            "count": 2,
+            "target": "opponent"
+          },
+          {
+            "op": "gainBlock",
+            "amount": 3
+          }
+        ]
+      },
+      {
+        "trigger": "onPlay",
+        "condition": {
+          "type": "hasVenue"
+        },
+        "effects": [
+          {
+            "op": "createPressure",
+            "count": 1,
+            "target": "opponent"
+          }
+        ]
+      }
+    ],
+    "artKey": "white_school_rules_briefing"
+  },
+  {
+    "id": "blue_course_grab_plugin",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "course",
+    "type": "action",
+    "tags": [
+      "blue",
+      "study"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 1
+          },
+          {
+            "op": "setFlag",
+            "flag": "nextBoughtCardToDeckTop"
+          }
+        ]
+      }
+    ],
+    "artKey": "blue_course_grab_plugin"
+  },
+  {
+    "id": "red_preselection_application",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 2,
+    "rarity": "common",
+    "lane": "activity",
+    "type": "action",
+    "tags": [
+      "red",
+      "sport"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
+        ]
+      },
+      {
+        "trigger": "onPlay",
+        "condition": {
+          "type": "hasReservedCard"
+        },
+        "effects": [
+          {
+            "op": "draw",
+            "count": 1
+          },
+          {
+            "op": "gainResource",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "red_preselection_application"
+  },
+  {
+    "id": "white_makeup_procedure",
+    "schemaVersion": 2,
+    "contentVersion": 1,
+    "cost": 3,
+    "rarity": "common",
+    "lane": "daily",
+    "type": "action",
+    "tags": [
+      "white",
+      "discipline"
+    ],
+    "abilities": [
+      {
+        "trigger": "onPlay",
+        "effects": [
+          {
+            "op": "trashFromHandOrDiscard",
+            "count": 1,
+            "zone": "either"
+          },
+          {
+            "op": "heal",
+            "amount": 1
+          }
+        ]
+      }
+    ],
+    "artKey": "white_makeup_procedure"
   }
 ]

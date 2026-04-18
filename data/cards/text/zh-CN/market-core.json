@@ -121,6 +121,54 @@
     "neutral_campus_broadcast": {
       "name": "校园广播",
       "body": "选择对手玩家，对其造成 2 点伤害。获得 1 资源。"
+    },
+    "red_morning_run_checklist": {
+      "name": "晨跑清单",
+      "body": "获得 1 攻击。若你有日程牌，再获得 2 攻击。"
+    },
+    "red_tournament_countdown": {
+      "name": "赛程倒计时",
+      "body": "摸 1 张牌。安排：下回合开始时，获得 3 攻击。"
+    },
+    "red_closed_gym_training": {
+      "name": "封馆训练",
+      "body": "【场馆】启动：获得 2 攻击。若你有日程牌，改为获得 4 攻击。"
+    },
+    "blue_after_class_makeup_log": {
+      "name": "课后补录",
+      "body": "摸 1 张牌。若你有预约牌，再获得 1 资源。"
+    },
+    "blue_review_outline": {
+      "name": "复习提纲",
+      "body": "预习 3，可弃 1。若你有日程牌，再摸 1 张牌。"
+    },
+    "blue_topic_defense": {
+      "name": "专题答辩",
+      "body": "摸 2 张牌。若你有日程牌，再免费获得 1 张费用不超过 3 的公开牌并置于牌库顶。"
+    },
+    "white_student_council_meeting": {
+      "name": "学生会例会",
+      "body": "获得 1 防备。若你有场馆，对手下回合开始时弃 1 张牌。"
+    },
+    "white_counseling_room": {
+      "name": "心理辅导室",
+      "body": "【值守场馆】启动：回复 1 生命并获得 1 防备。"
+    },
+    "white_school_rules_briefing": {
+      "name": "校规宣讲",
+      "body": "对手下回合开始时弃 2 张牌。获得 3 防备。若你有场馆，对手再获得 1 压力。"
+    },
+    "blue_course_grab_plugin": {
+      "name": "抢课插件",
+      "body": "获得 1 资源。你本回合购买的下一张牌置于牌库顶。"
+    },
+    "red_preselection_application": {
+      "name": "预选申请",
+      "body": "获得 1 资源。若你有预约牌，再摸 1 张牌并获得 1 资源。"
+    },
+    "white_makeup_procedure": {
+      "name": "补办手续",
+      "body": "从手牌或弃牌堆报废 1 张牌；回复 1 生命。"
     }
   }
 }
