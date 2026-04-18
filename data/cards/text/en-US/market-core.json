@@ -121,6 +121,54 @@
     "neutral_campus_broadcast": {
       "name": "Campus Broadcast",
       "body": "Choose the opponent player and deal 2 damage. Gain 1 resource."
+    },
+    "red_morning_run_checklist": {
+      "name": "Morning Run Checklist",
+      "body": "Gain 1 attack. If you have a scheduled card, gain 2 more attack."
+    },
+    "red_tournament_countdown": {
+      "name": "Tournament Countdown",
+      "body": "Draw 1 card. Schedule: At the start of next turn, gain 3 attack."
+    },
+    "red_closed_gym_training": {
+      "name": "Closed Gym Training",
+      "body": "[Venue] Activate: Gain 2 attack. If you have a scheduled card, gain 2 more attack."
+    },
+    "blue_after_class_makeup_log": {
+      "name": "After-Class Makeup Log",
+      "body": "Draw 1 card. If you have a reserved card, gain 1 resource."
+    },
+    "blue_review_outline": {
+      "name": "Review Outline",
+      "body": "Scry 3, you may discard 1. If you have a scheduled card, draw 1 card."
+    },
+    "blue_topic_defense": {
+      "name": "Topic Defense",
+      "body": "Draw 2 cards. If you have a scheduled card, gain a face-up card costing up to 3 for free and put it on top of your deck."
+    },
+    "white_student_council_meeting": {
+      "name": "Student Council Meeting",
+      "body": "Gain 1 block. If you have a venue, opponent discards 1 card at the start of their next turn."
+    },
+    "white_counseling_room": {
+      "name": "Counseling Room",
+      "body": "[Guard Venue] Activate: Heal 1 HP and gain 1 block."
+    },
+    "white_school_rules_briefing": {
+      "name": "School Rules Briefing",
+      "body": "Opponent discards 2 cards at the start of their next turn. Gain 3 block. If you have a venue, opponent also gains 1 Pressure."
+    },
+    "blue_course_grab_plugin": {
+      "name": "Course Grab Plugin",
+      "body": "Gain 1 resource. The next card you buy this turn is put on top of your deck."
+    },
+    "red_preselection_application": {
+      "name": "Preselection Application",
+      "body": "Gain 1 resource. If you have a reserved card, draw 1 card and gain 1 resource."
+    },
+    "white_makeup_procedure": {
+      "name": "Makeup Procedure",
+      "body": "Trash 1 card from your hand or discard pile; heal 1 HP."
     }
   }
 }
