@@ -2,18 +2,22 @@ import { Room, Client } from "colyseus";
 import * as path from "path";
 import * as fs from "fs";
 import { EVT } from "@dev-camcard/protocol";
-import type { ClientCommand, PlayerSide, MatchEvent, MatchSnapshot, MatchEventLog } from "@dev-camcard/protocol";
+import type {
+  ClientCommand,
+  PlayerSide,
+  MatchEvent,
+  MatchSnapshot,
+  MatchEventLog,
+} from "@dev-camcard/protocol";
 import {
-  createMatchState,
+  createSeededMatchState,
   createMarketState,
   reduce,
   toPublicMatchView,
   toPrivatePlayerView,
-  createSeededRng,
-  hashStringToSeed,
   resolveMarketCopiesByRarity,
 } from "@dev-camcard/engine";
-import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef, SeededRng } from "@dev-camcard/engine";
+import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef } from "@dev-camcard/engine";
 import {
   loadRuleBatch,
   assertRulesetDef,
@@ -70,7 +74,9 @@ for (const rule of allRules) {
 }
 
 // 市场牌列表（来自 rules/market-core.json）
-const marketRules = allRules.filter((r) => !r.starter && !r.fixedSupply && !r.isPressure && !r.tags.includes("pressure"));
+const marketRules = allRules.filter(
+  (r) => !r.starter && !r.fixedSupply && !r.isPressure && !r.tags.includes("pressure")
+);
 
 const ENGINE_CONFIG: EngineConfig = {
   ruleset,
@@ -131,9 +137,6 @@ export class GameRoom extends Room {
   private matchState!: InternalMatchState;
   /** sessionId → 席位 */
   private sideMap = new Map<string, PlayerSide>();
-  /** 房间内 UUID 计数器（简单递增，测试友好） */
-  private idCounter = 0;
-  private genId = () => `room-${this.roomId}-${++this.idCounter}`;
 
   // ── 事件日志 ─────────────────────────────────────────────────────────────────
   private matchEvents: MatchEvent[] = [];
@@ -141,27 +144,32 @@ export class GameRoom extends Room {
   private eventSeq = 0;
 
   // ── DB 写入状态 ───────────────────────────────────────────────────────────────
-  /** DB 创建成功后置 true，防止重复写入 MATCH_END */
+  /** Match 创建流程（用于串行等待，避免 join/event 提前到达时丢记录） */
+  private dbCreatePromise: Promise<void> | null = null;
+  /** Match 是否已成功落库 */
   private dbMatchCreated = false;
-  /** 对局结束事件是否已持久化 */
+  /** Match 是否已写入 endedAt/winner */
   private dbMatchEnded = false;
+  /** 防止多处并发重复执行 endMatch */
+  private dbEndPromise: Promise<void> | null = null;
 
-  private pushEvent(type: string, side?: PlayerSide, data?: Record<string, unknown>): void {
-    this.matchEvents.push({ seq: this.eventSeq++, ts: Date.now(), type, side, data });
+  private pushEvent(type: string, side?: PlayerSide, data?: Record<string, unknown>): MatchEvent {
+    const evt: MatchEvent = { seq: this.eventSeq++, ts: Date.now(), type, side, data };
+    this.matchEvents.push(evt);
+    return evt;
   }
 
   onCreate(options: unknown): void {
     const opts = (options ?? {}) as { seed?: number | string };
-    // 由 roomId 派生的确定性 seed；调用方可通过 options.seed 显式注入（测试友好）
-    const initialSeed =
-      opts.seed != null
-        ? typeof opts.seed === "string"
-          ? hashStringToSeed(opts.seed)
-          : opts.seed >>> 0
-        : hashStringToSeed(this.roomId);
-    const rng: SeededRng = createSeededRng(initialSeed);
+    const seedInput = opts.seed ?? this.roomId;
 
-    const baseState = createMatchState(this.roomId, ruleset, ["玩家一", "玩家二"], this.genId);
+    const { state: baseState, rng, genId, counter } = createSeededMatchState(
+      this.roomId,
+      ruleset,
+      ["玩家一", "玩家二"],
+      seedInput
+    );
+    const initialSeed = baseState.initialSeed;
 
     // 用引擎纯函数构造真实市场状态（每栏公开 2 张，其余入隐藏牌堆，已洗牌）
     // 用 seeded rng 洗牌 —— 保证相同 seed 下市场初始布局一致
@@ -169,15 +177,14 @@ export class GameRoom extends Room {
     const market = createMarketState(
       laneDefinitions,
       ruleset.marketSlotsPerLane,
-      this.genId,
+      genId,
       () => rng.next()
     );
     this.matchState = {
       ...baseState,
       market,
-      initialSeed,
       rngState: rng.state(),
-      idCounter: this.idCounter,
+      idCounter: counter(),
     };
 
     // 初始化快照元数据（含 seed，供回放重建使用）
@@ -193,9 +200,9 @@ export class GameRoom extends Room {
     this.pushEvent("MATCH_START");
 
     // ── 持久化：写 Match 记录（players 在 onJoin 时追加）────────────────────
-    this.dbCreateMatch().catch((err) =>
-      console.error("[GameRoom][DB] 创建 Match 失败:", err)
-    );
+    this.dbCreatePromise = this.dbCreateMatch().catch((err) => {
+      console.error("[GameRoom][DB] 创建 Match 失败:", err);
+    });
 
     // 统一消息处理器：客户端发 { type: CMD.*, ...payload }
     this.onMessage("*", (client: Client, type: string | number, message: unknown) => {
@@ -239,7 +246,7 @@ export class GameRoom extends Room {
 
       // 持久化玩家信息
       const playerName = opts.playerName ?? `玩家${side + 1}`;
-      this.dbUpsertPlayer(side, playerName).catch((err) =>
+      void this.dbUpsertPlayer(side, playerName).catch((err) =>
         console.error("[GameRoom][DB] upsert MatchPlayer 失败:", err)
       );
     }
@@ -284,14 +291,17 @@ export class GameRoom extends Room {
   }
 
   onDispose(): void {
-    // 记录对局结束
-    this.pushEvent("MATCH_END");
-    // 若对局已经有结果，持久化 endedAt + winner
-    if (!this.dbMatchEnded && this.dbMatchCreated) {
-      this.dbEndMatch(this.matchState.winner ?? null).catch((err) =>
-        console.error("[GameRoom][DB] endMatch 失败:", err)
+    const endEvt = this.pushMatchEndOnce({ winner: this.matchState.winner ?? null });
+    if (endEvt) {
+      void this.dbWriteEvent(endEvt).catch((err) =>
+        console.error("[GameRoom][DB] 写入 MATCH_END 事件失败:", err)
       );
     }
+
+    void this.dbEndMatch(this.matchState.winner ?? null).catch((err) =>
+      console.error("[GameRoom][DB] endMatch 失败:", err)
+    );
+
     console.log(`[GameRoom] 房间销毁: ${this.roomId}, 事件总数: ${this.matchEvents.length}`);
   }
 
@@ -317,6 +327,17 @@ export class GameRoom extends Room {
     client.send(EVT.MATCH_EVENTS, log);
   }
 
+  private hasRecordedMatchEnd(): boolean {
+    return this.matchEvents.some((evt) => evt.type === "MATCH_END");
+  }
+
+  private pushMatchEndOnce(data?: Record<string, unknown>): MatchEvent | null {
+    if (this.hasRecordedMatchEnd()) {
+      return null;
+    }
+    return this.pushEvent("MATCH_END", undefined, data);
+  }
+
   /**
    * 为已执行成功的命令记录事件（精简 payload，不存完整状态）。
    */
@@ -339,31 +360,36 @@ export class GameRoom extends Room {
     }
 
     const data = Object.keys(baseData).length > 0 ? baseData : undefined;
-    this.pushEvent(type, side, data);
+    const evt = this.pushEvent(type, side, data);
 
     // ── 持久化事件 ──────────────────────────────────────────────────────────
-    const evt = this.matchEvents[this.matchEvents.length - 1];
-    this.dbWriteEvent(evt).catch((err) =>
+    void this.dbWriteEvent(evt).catch((err) =>
       console.error("[GameRoom][DB] 写入事件失败:", err)
     );
 
     // 若对局已结束，记录 MATCH_END 并持久化
-    if (this.matchState.ended && this.matchEvents[this.matchEvents.length - 1]?.type !== "MATCH_END") {
-      this.pushEvent("MATCH_END", undefined, { winner: this.matchState.winner });
-      const endEvt = this.matchEvents[this.matchEvents.length - 1];
-      this.dbWriteEvent(endEvt).catch((err) =>
-        console.error("[GameRoom][DB] 写入 MATCH_END 事件失败:", err)
-      );
-      if (!this.dbMatchEnded && this.dbMatchCreated) {
-        this.dbMatchEnded = true;
-        this.dbEndMatch(this.matchState.winner ?? null).catch((err) =>
-          console.error("[GameRoom][DB] endMatch 失败:", err)
+    if (this.matchState.ended) {
+      const endEvt = this.pushMatchEndOnce({ winner: this.matchState.winner ?? null });
+      if (endEvt) {
+        void this.dbWriteEvent(endEvt).catch((err) =>
+          console.error("[GameRoom][DB] 写入 MATCH_END 事件失败:", err)
         );
       }
+
+      void this.dbEndMatch(this.matchState.winner ?? null).catch((err) =>
+        console.error("[GameRoom][DB] endMatch 失败:", err)
+      );
     }
   }
 
   // ── DB 操作（fire-and-forget，不阻塞游戏逻辑）──────────────────────────────
+
+  private async ensureDbMatchCreated(): Promise<boolean> {
+    if (this.dbMatchCreated) return true;
+    if (!this.dbCreatePromise) return false;
+    await this.dbCreatePromise;
+    return this.dbMatchCreated;
+  }
 
   private async dbCreateMatch(): Promise<void> {
     const prisma = getPrisma();
@@ -379,7 +405,7 @@ export class GameRoom extends Room {
   }
 
   private async dbUpsertPlayer(side: PlayerSide, name: string): Promise<void> {
-    if (!this.dbMatchCreated) return; // Match 尚未落库，跳过（极低概率竞争）
+    if (!(await this.ensureDbMatchCreated())) return;
     const prisma = getPrisma();
     await prisma.matchPlayer.upsert({
       where: { matchId_side: { matchId: this.roomId, side } },
@@ -389,7 +415,7 @@ export class GameRoom extends Room {
   }
 
   private async dbWriteEvent(evt: MatchEvent): Promise<void> {
-    if (!this.dbMatchCreated) return; // 等待 match 落库
+    if (!(await this.ensureDbMatchCreated())) return;
     const prisma = getPrisma();
     await prisma.matchEvent.create({
       data: {
@@ -404,13 +430,29 @@ export class GameRoom extends Room {
   }
 
   private async dbEndMatch(winner: number | null): Promise<void> {
-    const prisma = getPrisma();
-    await prisma.match.update({
-      where: { id: this.roomId },
-      data: {
-        endedAt: new Date(),
-        winner,
-      },
-    });
+    if (this.dbMatchEnded) return;
+    if (this.dbEndPromise) {
+      await this.dbEndPromise;
+      return;
+    }
+
+    this.dbEndPromise = (async () => {
+      if (!(await this.ensureDbMatchCreated())) return;
+      const prisma = getPrisma();
+      await prisma.match.update({
+        where: { id: this.roomId },
+        data: {
+          endedAt: new Date(),
+          winner,
+        },
+      });
+      this.dbMatchEnded = true;
+    })();
+
+    try {
+      await this.dbEndPromise;
+    } finally {
+      this.dbEndPromise = null;
+    }
   }
 }

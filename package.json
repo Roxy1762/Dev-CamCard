@@ -4,11 +4,11 @@
   "private": true,
   "description": "Dev-CamCard · 课表风暴 — monorepo 根配置",
   "scripts": {
-    "dev": "pnpm -r --if-present --parallel run dev",
-    "build": "pnpm -r run build",
-    "test": "pnpm -r --if-present run test",
-    "typecheck": "pnpm -r run typecheck",
-    "lint": "pnpm -r --if-present run lint",
+    "dev": "corepack pnpm -r --if-present --parallel run dev",
+    "build": "corepack pnpm -r run build",
+    "test": "corepack pnpm -r --if-present run test",
+    "typecheck": "corepack pnpm -r run typecheck",
+    "lint": "corepack pnpm -r --if-present run lint",
     "generate:card-catalog": "node scripts/generate-card-catalog.mjs"
   },
   "engines": {
@@ -16,6 +16,12 @@
     "pnpm": ">=9"
   },
   "pnpm": {
-    "onlyBuiltDependencies": ["esbuild", "msgpackr-extract", "@prisma/engines", "prisma"]
-  }
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "msgpackr-extract",
+      "@prisma/engines",
+      "prisma"
+    ]
+  },
+  "packageManager": "pnpm@10.33.0+sha512.10568bb4a6afb58c9eb3630da90cc9516417abebd3fabbe6739f0ae795728da1491e9db5a544c76ad8eb7570f5c4bb3d6c637b2cb41bfdcdb47fa823c8649319"
 }

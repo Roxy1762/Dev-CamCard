@@ -399,34 +399,58 @@ function handleAssignAttack(
 ): InternalMatchState {
   if (assignments.length === 0) return state;
 
-  const oppSide: PlayerSide = side === 0 ? 1 : 0;
-  const oppPlayer = state.players[oppSide];
-  const guardVenues = oppPlayer.venues.filter((v) => v.isGuard);
-
-  if (guardVenues.length > 0) {
-    for (const assign of assignments) {
-      if (assign.targetSide !== oppSide) continue;
-      if (assign.target === "player") {
-        throw new Error("对方有值守场馆，必须先摧毁值守场馆才能攻击玩家");
-      }
-      if (assign.target === "venue") {
-        const targeted = oppPlayer.venues.find(
-          (v) => v.instanceId === assign.venueInstanceId
-        );
-        if (!targeted || !targeted.isGuard) {
-          throw new Error("对方有值守场馆，必须优先攻击值守场馆");
-        }
-      }
-    }
-  }
-
   let s = state;
   for (const assignment of assignments) {
+    assertValidAttackAssignment(assignment, side);
+    assertAttackTargetIsReachable(s, side, assignment);
     s = processAssignment(s, side, assignment);
     if (s.ended) break;
   }
 
   return s;
+}
+
+function assertValidAttackAssignment(
+  assignment: AttackAssignment,
+  attackerSide: PlayerSide
+): void {
+  if (!Number.isInteger(assignment.amount) || assignment.amount <= 0) {
+    throw new Error(`攻击量必须是正整数，实际为 ${assignment.amount}`);
+  }
+
+  const opponentSide: PlayerSide = attackerSide === 0 ? 1 : 0;
+  if (assignment.targetSide !== opponentSide) {
+    throw new Error("攻击只能指定对手为目标");
+  }
+
+  if (assignment.target === "venue" && !assignment.venueInstanceId) {
+    throw new Error("攻击场馆时必须提供 venueInstanceId");
+  }
+}
+
+function assertAttackTargetIsReachable(
+  state: InternalMatchState,
+  attackerSide: PlayerSide,
+  assignment: AttackAssignment
+): void {
+  const opponentSide: PlayerSide = attackerSide === 0 ? 1 : 0;
+  const opponent = state.players[opponentSide];
+  const guardVenues = opponent.venues.filter((v) => v.isGuard);
+
+  if (guardVenues.length === 0) {
+    return;
+  }
+
+  if (assignment.target === "player") {
+    throw new Error("对方有值守场馆，必须先摧毁值守场馆才能攻击玩家");
+  }
+
+  const targetedVenue = opponent.venues.find(
+    (v) => v.instanceId === assignment.venueInstanceId
+  );
+  if (!targetedVenue || !targetedVenue.isGuard) {
+    throw new Error("对方有值守场馆，必须优先攻击值守场馆");
+  }
 }
 
 function processAssignment(
@@ -474,10 +498,6 @@ function processAssignment(
   if (assignment.target === "venue") {
     const targetSide = assignment.targetSide;
     const target = state.players[targetSide];
-
-    if (!assignment.venueInstanceId) {
-      throw new Error("攻击场馆时必须提供 venueInstanceId");
-    }
 
     const venueIdx = target.venues.findIndex(
       (v) => v.instanceId === assignment.venueInstanceId

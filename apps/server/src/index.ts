@@ -7,9 +7,39 @@ import { getPrisma, closePrisma } from "./prisma";
 
 const port = Number(process.env.PORT ?? 2567);
 
+function resolveAllowedOrigins(): string[] {
+  const raw = process.env.CLIENT_ORIGIN?.trim();
+  if (!raw) {
+    return ["http://localhost:5173", "http://localhost:3000"];
+  }
+  return raw
+    .split(",")
+    .map((origin) => origin.trim())
+    .filter(Boolean);
+}
+
+const allowedOrigins = resolveAllowedOrigins();
+
 const app = express();
-// 允许来自 Phaser 开发服务器的跨域请求
-app.use(cors({ origin: process.env.CLIENT_ORIGIN ?? "http://localhost:3000" }));
+// 允许来自 Phaser 开发服务器与部署前端的跨域请求
+app.use(
+  cors({
+    origin(origin, callback) {
+      // 无 Origin 的请求（health check / curl / 服务器间调用）直接放行。
+      if (!origin) {
+        callback(null, true);
+        return;
+      }
+
+      if (allowedOrigins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+
+      callback(new Error(`CORS blocked for origin: ${origin}`));
+    },
+  })
+);
 app.use(express.json());
 
 app.get("/health", (_req, res) => {
@@ -95,9 +125,10 @@ function serializeMatch(m: MatchRow) {
     startedAt: m.startedAt.toISOString(),
     endedAt: m.endedAt?.toISOString() ?? null,
     winner: m.winner,
-    players: "players" in m
-      ? (m as MatchRow & { players: { id: number; side: number; name: string }[] }).players
-      : undefined,
+    players:
+      "players" in m
+        ? (m as MatchRow & { players: { id: number; side: number; name: string }[] }).players
+        : undefined,
   };
 }
 
@@ -106,7 +137,7 @@ function serializeEvent(e: EventRow) {
     id: e.id,
     matchId: e.matchId,
     seq: e.seq,
-    ts: e.ts.toString(),   // BigInt → string
+    ts: e.ts.toString(), // BigInt → string
     type: e.type,
     side: e.side,
     data: e.data,
@@ -121,6 +152,7 @@ gameServer.define("game_room", GameRoom);
 
 gameServer.listen(port).then(() => {
   console.log(`房间服务已启动，端口 ${port}`);
+  console.log(`Allowed origins: ${allowedOrigins.join(", ")}`);
   console.log(`WebSocket: ws://localhost:${port}`);
   console.log(`Health:    http://localhost:${port}/health`);
   console.log(`API:       http://localhost:${port}/api/matches`);

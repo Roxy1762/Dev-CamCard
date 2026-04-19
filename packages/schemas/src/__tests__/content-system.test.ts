@@ -314,7 +314,9 @@ describe("market-core 新增能力牌最小校验", () => {
     const card = rules.find((c) => c.id === "white_school_rules_briefing");
     expect(card).toBeDefined();
     const conditional = card!.abilities.find(
-      (a) => a.trigger === "onPlay" && a.condition?.type === "hasVenue",
+      (a) =>
+        a.trigger === "onPlay" &&
+        (a.condition as { type?: string } | undefined)?.type === "hasVenue",
     );
     expect(conditional?.effects).toContainEqual({
       op: "createPressure",

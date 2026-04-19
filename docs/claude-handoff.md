@@ -1,3 +1,46 @@
+# Claude 交接文档（2026-04-19 增量修复版）
+
+> 本轮已从“审查”进入“直接修主链 + 提升可部署性”的阶段。下面先给最新变更，再保留旧交接内容供上下文参考。
+
+## 最新一轮更新（战斗主链 / 客户端可达性 / 持久化时序）
+
+- 引擎修复 `ASSIGN_ATTACK` 三个关键 bug：
+  - 禁止负数/零攻击量（防止反向加 attackPool / 反向加 block 的 exploit）。
+  - 禁止把攻击指向自己。
+  - 修复 guard 校验时机：现在同一条命令内可以“先摧毁 guard，再继续攻击玩家”。
+- 新增回归测试：
+  - 负攻击量拒绝
+  - 自指目标拒绝
+  - 同命令内拆 guard 后转火玩家
+- 客户端 RoomScene 已补齐：
+  - 对方场馆的直接攻击按钮
+  - guard 存在时的显式提示
+  - 服务端 `error` 消息可视反馈
+  - 回放按钮改为拉取完整事件日志后，以覆盖层方式打开 ReplayScene
+- ReplayScene 已修复返回链路：
+  - 不再 `scene.start("RoomScene")` 导致丢失 init 数据
+  - 现在 `stop("ReplayScene") + resume(parentSceneKey)` 恢复原牌桌
+- RoomClient 新增：
+  - `onError`
+  - `requestEventLogOnce()`（不覆盖全局 onEventLog，避免回放与牌桌监听互相踩）
+  - 更稳健的默认 WS 地址推导（本地开发走 `:2567`，部署默认同 host）
+- server 端 GameRoom 已修复：
+  - Match 创建与后续 player/event 写入之间的竞争条件
+  - `MATCH_END` 重复事件风险
+  - 改用 `createSeededMatchState(...)` 作为官方 seeded 初始入口
+- server CORS 已支持：
+  - `CLIENT_ORIGIN` 逗号分隔多 origin
+  - 默认同时允许 `http://localhost:5173` 与 `http://localhost:3000`
+
+## 建议 Claude 下一步优先做的事
+
+1. 把 ReplayScene 从“日志查看器”升级为“按 snapshot.initialSeed + event log 重建状态的逐事件播放器”。
+2. 给 RoomScene 做一个真正的“多段攻击分配器”面板，而不是仅靠快捷按钮。
+3. 增加联调脚本 / README 部署步骤 / Docker Compose（server + postgres + admin/client 代理）。
+4. 给 server / client 补最小 smoke test（至少覆盖 join → ready → play → attack → concede）。
+
+---
+
 # Claude 交接文档（2026-04-18 结构重做版）
 
 > 当前项目已从“概念验证”进入**可持续推进的技术原型**阶段。后续推进以规则正确性与可复现性优先。

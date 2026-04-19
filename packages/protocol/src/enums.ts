@@ -14,5 +14,10 @@ export type VenueKind = "normal" | "guard";
 /** 商店栏（三栏商店） */
 export type Lane = "course" | "activity" | "daily";
 
-/** 卡牌稀有度 */
-export type Rarity = "common" | "advanced" | "signature";
+/**
+ * 卡牌稀有度。
+ *
+ * 现行数据主用：common / uncommon / rare / signature
+ * 兼容保留：advanced（旧文档遗留值，暂不在新数据中使用）
+ */
+export type Rarity = "common" | "uncommon" | "rare" | "advanced" | "signature";

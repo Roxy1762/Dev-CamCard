@@ -1,8 +1,33 @@
 import { Client, type Room } from "colyseus.js";
-import type { PublicMatchView, PrivatePlayerView, ClientCommand, MatchEventLog } from "@dev-camcard/protocol";
+import type {
+  PublicMatchView,
+  PrivatePlayerView,
+  ClientCommand,
+  MatchEventLog,
+} from "@dev-camcard/protocol";
 import { EVT } from "@dev-camcard/protocol";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL ?? "ws://localhost:2567";
+function resolveDefaultServerUrl(): string {
+  const explicit = import.meta.env.VITE_SERVER_URL as string | undefined;
+  if (explicit) return explicit;
+
+  if (typeof window === "undefined") {
+    return "ws://localhost:2567";
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const { hostname, host, port } = window.location;
+
+  // 本地开发时默认 Phaser/Vite 与 Colyseus 分端口运行。
+  if (port === "5173" || port === "4173" || port === "3000") {
+    return `${protocol}//${hostname}:2567`;
+  }
+
+  // 线上默认走同 host，同协议映射 ws/wss。
+  return `${protocol}//${host}`;
+}
+
+const SERVER_URL = resolveDefaultServerUrl();
 
 /** localStorage key — 存储上次的 reconnectionToken */
 const STORAGE_KEY = "devCamCard_reconnectionToken";
@@ -10,6 +35,7 @@ const STORAGE_KEY = "devCamCard_reconnectionToken";
 export type StateUpdateHandler = (view: PublicMatchView) => void;
 export type PrivateUpdateHandler = (view: PrivatePlayerView) => void;
 export type EventLogHandler = (log: MatchEventLog) => void;
+export type ErrorHandler = (message: string) => void;
 
 /**
  * RoomClient — Colyseus 连接封装。
@@ -26,6 +52,7 @@ export type EventLogHandler = (log: MatchEventLog) => void;
 export class RoomClient {
   private readonly client: Client;
   private room: Room<unknown> | null = null;
+  private eventLogWaiters: Array<(log: MatchEventLog) => void> = [];
 
   /**
    * 公开状态更新回调 — 每次收到 state_update 时调用。
@@ -44,6 +71,11 @@ export class RoomClient {
    * 重连后服务端会主动推送完整事件流。
    */
   public onEventLog: EventLogHandler | null = null;
+
+  /**
+   * 错误回调 — 服务端拒绝命令或出现可见错误时触发。
+   */
+  public onError: ErrorHandler | null = null;
 
   constructor(serverUrl: string = SERVER_URL) {
     this.client = new Client(serverUrl);
@@ -92,14 +124,31 @@ export class RoomClient {
     this.room?.send("REQUEST_MATCH_EVENTS", {});
   }
 
+  /**
+   * 一次性请求完整事件日志。
+   * 不会覆盖全局 onEventLog 回调，适合临时打开回放界面。
+   */
+  requestEventLogOnce(): Promise<MatchEventLog> {
+    if (!this.room) {
+      return Promise.reject(new Error("room_not_connected"));
+    }
+
+    return new Promise<MatchEventLog>((resolve) => {
+      this.eventLogWaiters.push(resolve);
+      this.requestEventLog();
+    });
+  }
+
   /** 主动离开房间（清理 token，不需要重连） */
   leave(): void {
     RoomClient.clearReconnectionToken();
     this.room?.leave();
     this.room = null;
+    this.eventLogWaiters = [];
     this.onStateUpdate = null;
     this.onPrivateUpdate = null;
     this.onEventLog = null;
+    this.onError = null;
   }
 
   get roomId(): string | null {
@@ -151,6 +200,17 @@ export class RoomClient {
 
     this.room.onMessage(EVT.MATCH_EVENTS, (msg: MatchEventLog) => {
       this.onEventLog?.(msg);
+
+      if (this.eventLogWaiters.length > 0) {
+        const waiters = this.eventLogWaiters.splice(0, this.eventLogWaiters.length);
+        for (const resolve of waiters) {
+          resolve(msg);
+        }
+      }
+    });
+
+    this.room.onMessage("error", (msg: { message?: string }) => {
+      this.onError?.(msg.message ?? "服务器返回未知错误");
     });
   }
 }

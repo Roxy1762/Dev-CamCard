@@ -170,6 +170,19 @@ function startedState(): InternalMatchState {
   return reduce(s1, 1, { type: "READY" }, CONFIG, deterministicRandom, genId);
 }
 
+function stateForAttack(
+  attackPool: number,
+  targetBlock: number,
+  targetHp = 32
+): InternalMatchState {
+  const base = startedState();
+  const players: [InternalPlayerState, InternalPlayerState] = [
+    { ...base.players[0], attackPool },
+    { ...base.players[1], block: targetBlock, hp: targetHp },
+  ];
+  return { ...base, players };
+}
+
 // ── READY ─────────────────────────────────────────────────────────────────────
 
 describe("reduce: READY", () => {
@@ -229,6 +242,26 @@ describe("reduce: END_TURN", () => {
     const state = startedState();
     const result = reduce(state, 0, { type: "END_TURN" }, CONFIG, deterministicRandom, genId);
     expect(result.activePlayer).toBe(1);
+  });
+
+  it("攻击量必须为正整数", () => {
+    const state = stateForAttack(1, 3);
+    expect(() =>
+      reduce(state, 0, {
+        type: "ASSIGN_ATTACK",
+        assignments: [{ amount: -1, target: "player", targetSide: 1 }],
+      }, CONFIG)
+    ).toThrow("攻击量必须是正整数");
+  });
+
+  it("不可把攻击指向自己", () => {
+    const state = stateForAttack(3, 0);
+    expect(() =>
+      reduce(state, 0, {
+        type: "ASSIGN_ATTACK",
+        assignments: [{ amount: 1, target: "player", targetSide: 0 }],
+      }, CONFIG)
+    ).toThrow("攻击只能指定对手为目标");
   });
 
   it("非行动方调用时抛出错误", () => {
@@ -958,6 +991,26 @@ describe("reduce: ASSIGN_ATTACK (venue & guard)", () => {
         assignments: [{ amount: 2, target: "player", targetSide: 1 }],
       }, CONFIG)
     ).not.toThrow();
+  });
+
+  it("同一条命令内摧毁值守场馆后可继续攻击玩家", () => {
+    const state = stateForVenueAttack(5, 3, true);
+    const result = reduce(
+      state,
+      0,
+      {
+        type: "ASSIGN_ATTACK",
+        assignments: [
+          { amount: 3, target: "venue", targetSide: 1, venueInstanceId: "opp-venue" },
+          { amount: 2, target: "player", targetSide: 1 },
+        ],
+      },
+      CONFIG
+    );
+
+    expect(result.players[1].venues).toHaveLength(0);
+    expect(result.players[1].hp).toBe(30);
+    expect(result.players[0].attackPool).toBe(0);
   });
 
   it("回合开始时场馆耐久重置（伤害不保留）", () => {

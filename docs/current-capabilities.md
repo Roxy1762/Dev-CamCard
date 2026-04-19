@@ -28,13 +28,15 @@
 
 ### 5) 联机与持久化
 - 断线重连（60 秒）可用。
-- 事件日志可拉取，回放入口已接通（当前为日志视图）。
-- Prisma + PostgreSQL 持久化可用，含 Match / MatchPlayer / MatchEvent。
+- 事件日志可拉取，回放入口已接通（当前为日志视图），且回放界面返回链路已修复为覆盖层恢复 RoomScene。
+- Prisma + PostgreSQL 持久化可用，含 Match / MatchPlayer / MatchEvent；已补齐 Match 创建与玩家/事件写入之间的时序等待，避免极端竞争下丢记录。
 - 提供只读 API：`/api/matches`、`/api/matches/:id`、`/api/matches/:id/events`。
 
 ### 6) 可见性与客户端
 - Public/Private 视图分层已落地。
 - 场馆耐久字段（`durability/maxDurability`）已在公开视图与客户端显示链路中。
+- 客户端已补齐“攻击场馆”操作入口、guard 阻挡提示、服务端错误消息可视反馈。
+- RoomClient 已支持更稳健的默认 WS 地址推导；server 端 CORS 支持多 origin 白名单。
 
 ### 7) 可复现性基础（Mulberry32 seeded RNG）
 - 统一 RNG 模块：`packages/engine/src/rng.ts`（`createSeededRng` / `hashStringToSeed` / `createSeededIdFactory`）。
@@ -54,7 +56,7 @@
 
 ### 1) 规则正确性与一致性（优先）
 - 日程槽“可安排对象、触发时机、客户端交互入口”的一致性仍需持续收敛。
-- 攻击场馆的客户端可操作入口与 guard 场景交互仍不完整。
+- 攻击分配 UI 仍偏 MVP：当前以“全力打脸 / 对单个场馆快捷攻击”两种快捷操作为主，尚未提供可视化多段拆分分配器。
 
 ### 2) 可复现性（部分完成）
 - 基础 seeded RNG 已落地；但完整回放（逐事件重建并渲染）尚未实现。

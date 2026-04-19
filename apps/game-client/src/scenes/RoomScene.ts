@@ -69,6 +69,13 @@ export class RoomScene extends Phaser.Scene {
   /** 最小事件日志（最近 N 条，用于底部摘要显示） */
   private recentEvents: MatchEvent[] = [];
 
+  /** 顶部错误提示（服务端拒绝命令 / 非法操作） */
+  private errorText: string | null = null;
+  private errorClearTimer: Phaser.Time.TimerEvent | null = null;
+
+  /** 避免重复点击“查看回放”并重复发请求 */
+  private replayLoading = false;
+
   constructor() {
     super({ key: "RoomScene" });
   }
@@ -96,6 +103,9 @@ export class RoomScene extends Phaser.Scene {
       this.recentEvents = log.events.slice(-8);
       this.rebuildUI();
     };
+    this.roomClient.onError = (message: string) => {
+      this.showError(message);
+    };
 
     this.rebuildUI();
   }
@@ -116,11 +126,13 @@ export class RoomScene extends Phaser.Scene {
 
     if (vm.pendingChoice) {
       this.drawTopBar(vm);
+      this.drawErrorBanner();
       this.drawChoicePanel(vm, vm.pendingChoice);
       return;
     }
 
     this.drawTopBar(vm);
+    this.drawErrorBanner();
     this.drawOpponentInfo(vm);
     this.drawShopArea(vm);
     this.drawMyInfo(vm);
@@ -145,24 +157,81 @@ export class RoomScene extends Phaser.Scene {
     this.hr(0, 26, W);
   }
 
+  private drawErrorBanner(): void {
+    if (!this.errorText) return;
+    this.txtBox(10, 30, this.cameras.main.width - 20, 18, this.errorText, 10, "#441111", "#ffaaaa");
+  }
+
+  private showError(message: string): void {
+    this.errorText = message;
+    this.errorClearTimer?.remove(false);
+    this.errorClearTimer = this.time.delayedCall(2600, () => {
+      this.errorText = null;
+      this.errorClearTimer = null;
+      this.rebuildUI();
+    });
+    this.rebuildUI();
+  }
+
   // ── 对方信息区 ────────────────────────────────────────────────────────────────
 
   private drawOpponentInfo(vm: BoardViewModel): void {
     const opp = vm.opp;
 
-    let y = 32;
+    let y = this.errorText ? 54 : 32;
     this.txt(10, y, `▌ 对方 [玩家${opp.side + 1}] ${opp.name}`, 13, C_VALUE);
     y += 18;
     this.txt(10, y, `HP: ${opp.hp}   防备: ${opp.block}   手牌数: ${opp.handSize}   牌堆: ${opp.deckSize}`, 12, C_HP);
     y += 16;
 
     if (opp.venues.length > 0) {
+      const hasGuard = opp.venues.some((venue) => venue.isGuard);
       this.txt(10, y, "对方场馆:", 11, C_LABEL);
       y += 14;
       for (const venue of opp.venues) {
         const guardLabel = venue.isGuard ? "【值守】" : "【场馆】";
-        this.txt(20, y, `${guardLabel} ${vm.getCardName(venue.cardId)}  耐久:${venue.durability}/${venue.maxDurability}`, 11, C_VENUE);
-        y += 14;
+        const canAttackThisVenue = vm.isMyTurn && vm.me.attackPool > 0 && (!hasGuard || venue.isGuard);
+        const attackAmount = Math.min(vm.me.attackPool, venue.durability);
+
+        this.txt(
+          20,
+          y,
+          `${guardLabel} ${vm.getCardName(venue.cardId)}  耐久:${venue.durability}/${venue.maxDurability}`,
+          11,
+          venue.isGuard ? C_GUARD : C_VENUE
+        );
+
+        if (canAttackThisVenue && attackAmount > 0) {
+          this.btn(
+            240,
+            y - 2,
+            140,
+            18,
+            `攻击场馆 ${attackAmount}`,
+            9,
+            venue.isGuard ? C_GUARD : C_VENUE,
+            C_BTN_TXT,
+            () => {
+              this.roomClient.send({
+                type: CMD.ASSIGN_ATTACK,
+                assignments: [
+                  {
+                    amount: attackAmount,
+                    target: "venue",
+                    targetSide: vm.oppSide,
+                    venueInstanceId: venue.instanceId,
+                  },
+                ],
+              });
+            }
+          );
+          y += 22;
+        } else {
+          if (vm.isMyTurn && vm.me.attackPool > 0 && hasGuard && !venue.isGuard) {
+            this.txt(240, y, "需先处理值守场馆", 10, "#ff9999");
+          }
+          y += 14;
+        }
       }
     }
 
@@ -185,7 +254,7 @@ export class RoomScene extends Phaser.Scene {
     const W = this.cameras.main.width;
     const shopX = Math.floor(W / 2);
 
-    let y = 32;
+    let y = this.errorText ? 54 : 32;
     this.txt(shopX + 4, y, "【商  店】", 13, C_TITLE);
     y += 18;
 
@@ -341,15 +410,20 @@ export class RoomScene extends Phaser.Scene {
 
     if (!vm.ended && vm.isMyTurn) {
       const oppSide = vm.oppSide;
+      const oppHasGuard = vm.opp.venues.some((venue) => venue.isGuard);
 
       if (vm.me.attackPool > 0) {
-        const label = `⚔ 攻击对手（全力 ${vm.me.attackPool}）`;
-        this.btn(190, BTN_Y, 220, BTN_H, label, 12, C_BTN_DNG, "#ffaaaa", () => {
-          this.roomClient.send({
-            type: CMD.ASSIGN_ATTACK,
-            assignments: [{ amount: vm.me.attackPool, target: "player", targetSide: oppSide }],
+        if (oppHasGuard) {
+          this.txt(190, BTN_Y + 12, "⚠ 对方有值守场馆，需先在上方摧毁后才能攻击玩家", 10, "#ffaaaa");
+        } else {
+          const label = `⚔ 攻击对手（全力 ${vm.me.attackPool}）`;
+          this.btn(190, BTN_Y, 220, BTN_H, label, 12, C_BTN_DNG, "#ffaaaa", () => {
+            this.roomClient.send({
+              type: CMD.ASSIGN_ATTACK,
+              assignments: [{ amount: vm.me.attackPool, target: "player", targetSide: oppSide }],
+            });
           });
-        });
+        }
       }
 
       this.btn(424, BTN_Y, 140, BTN_H, "⏎ 结束回合", 13, C_BTN_ACT, "#aaffaa", () => {
@@ -590,14 +664,41 @@ export class RoomScene extends Phaser.Scene {
     });
 
     // 回放入口按钮
-    this.btn(W - 100, STRIP_Y, 90, 30, "查看回放", 9, "#222233", "#6688aa", () => {
-      this.roomClient.requestEventLog();
-      this.scene.start("ReplayScene", {
+    this.btn(
+      W - 124,
+      STRIP_Y,
+      114,
+      30,
+      this.replayLoading ? "回放加载中..." : "查看回放",
+      9,
+      "#222233",
+      "#6688aa",
+      () => {
+        void this.openReplay();
+      }
+    );
+  }
+
+  private async openReplay(): Promise<void> {
+    if (this.replayLoading) return;
+
+    this.replayLoading = true;
+    this.rebuildUI();
+
+    try {
+      const log = await this.roomClient.requestEventLogOnce();
+      this.replayLoading = false;
+      this.scene.pause();
+      this.scene.launch("ReplayScene", {
         roomClient: this.roomClient,
         cardNames: this.cardNames,
-        matchLog: this.recentEvents,
+        matchLog: log.events,
+        parentSceneKey: this.scene.key,
       });
-    });
+    } catch (err) {
+      this.replayLoading = false;
+      this.showError(err instanceof Error ? err.message : "加载回放失败");
+    }
   }
 
   // ── UI 辅助工厂 ───────────────────────────────────────────────────────────────
