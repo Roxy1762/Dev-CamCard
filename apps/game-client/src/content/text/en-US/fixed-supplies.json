@@ -1,0 +1,18 @@
+{
+  "schemaVersion": 1,
+  "locale": "en-US",
+  "cards": {
+    "supply_errand_runner": {
+      "name": "Errand Runner",
+      "body": "Heal 1 HP. Gain 1 block."
+    },
+    "supply_milk_bread": {
+      "name": "Milk Bread",
+      "body": "Gain 2 resources. Gain 1 block."
+    },
+    "supply_print_materials": {
+      "name": "Print Materials",
+      "body": "Draw 2 cards, then discard 1."
+    }
+  }
+}
