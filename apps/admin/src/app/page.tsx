@@ -2,7 +2,9 @@ import MatchesDashboard from "./matches-dashboard";
 
 export default function HomePage() {
   const apiBase =
-    process.env.NEXT_PUBLIC_API_BASE ?? "http://localhost:2567";
+    process.env.ADMIN_API_BASE ??
+    process.env.NEXT_PUBLIC_API_BASE ??
+    "http://localhost:2567";
 
   return (
     <main
