@@ -36,7 +36,7 @@ export default function MatchesDashboard({ apiBase }: DashboardProps) {
     setStatus("loading");
     setErr(null);
     try {
-      const res = await fetch(`${apiBase}/api/matches`, { cache: "no-store" });
+      const res = await fetch(`/api/matches`, { cache: "no-store" });
       if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
       const data = (await res.json()) as MatchRow[];
       setMatches(data);
@@ -45,7 +45,7 @@ export default function MatchesDashboard({ apiBase }: DashboardProps) {
       setErr(e instanceof Error ? e.message : String(e));
       setStatus("error");
     }
-  }, [apiBase]);
+  }, []);
 
   useEffect(() => {
     void load();
@@ -57,7 +57,7 @@ export default function MatchesDashboard({ apiBase }: DashboardProps) {
       setEvents(null);
       setEventsLoading(true);
       try {
-        const res = await fetch(`${apiBase}/api/matches/${matchId}/events`, {
+        const res = await fetch(`/api/matches/${matchId}/events`, {
           cache: "no-store",
         });
         if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
@@ -70,7 +70,7 @@ export default function MatchesDashboard({ apiBase }: DashboardProps) {
         setEventsLoading(false);
       }
     },
-    [apiBase]
+    []
   );
 
   return (

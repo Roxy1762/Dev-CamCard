@@ -96,7 +96,21 @@ export class BootScene extends Phaser.Scene {
     };
 
     connect().catch((err: unknown) => {
-      const msg = err instanceof Error ? err.message : String(err);
+      let msg: string;
+      if (err instanceof Error) {
+        msg = err.message;
+      } else if (typeof err === "object" && err !== null) {
+        const anyErr = err as Record<string, unknown>;
+        if (typeof anyErr.message === "string" && anyErr.message) {
+          msg = anyErr.message;
+        } else if (typeof anyErr.code === "number") {
+          msg = `连接失败 (code ${anyErr.code})`;
+        } else {
+          msg = "连接服务器失败（网络不可达）";
+        }
+      } else {
+        msg = String(err);
+      }
       statusText.setText(`连接失败: ${msg}`);
       statusText.setColor("#ff6666");
     });

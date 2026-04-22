@@ -42,6 +42,10 @@ app.use(
 );
 app.use(express.json());
 
+app.get("/", (_req, res) => {
+  res.redirect("/health");
+});
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok", message: "房间服务已启动" });
 });
