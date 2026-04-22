@@ -1,0 +1,76 @@
+# Dev-CamCard · 课表风暴  一键部署编排
+#
+# 启动方式：
+#   cp .env.example .env         # 按需修改密码/端口
+#   scripts/deploy.sh            # 或直接 docker compose up -d --build
+#
+# 服务：
+#   postgres     – Prisma 数据库
+#   server       – Colyseus + Express（2567）
+#   game-client  – Phaser 静态站（nginx，3000）
+#   admin        – Next.js 运营后台（3001，可选）
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-camcard}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-camcard}
+      POSTGRES_DB: ${POSTGRES_DB:-camcard}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-camcard}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    build:
+      context: .
+      dockerfile: apps/server/Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-camcard}:${POSTGRES_PASSWORD:-camcard}@postgres:5432/${POSTGRES_DB:-camcard}
+      PORT: ${SERVER_PORT:-2567}
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:3000,http://localhost:3001}
+    ports:
+      - "${SERVER_PORT:-2567}:2567"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:2567/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  game-client:
+    build:
+      context: .
+      dockerfile: apps/game-client/Dockerfile
+      args:
+        VITE_SERVER_URL: ${VITE_SERVER_URL:-ws://localhost:2567}
+    restart: unless-stopped
+    ports:
+      - "${CLIENT_HOST_PORT:-3000}:80"
+    depends_on:
+      - server
+
+  admin:
+    build:
+      context: .
+      dockerfile: apps/admin/Dockerfile
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-http://localhost:2567}
+    ports:
+      - "${ADMIN_HOST_PORT:-3001}:3001"
+    depends_on:
+      - server
+
+volumes:
+  postgres_data:

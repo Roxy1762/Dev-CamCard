@@ -1,0 +1,21 @@
+**/node_modules
+**/dist
+**/.next
+**/out
+**/*.tsbuildinfo
+**/.turbo
+
+.git
+.gitignore
+.env
+.env.local
+.env.*.local
+*.log
+
+# pnpm store（镜像内会重新生成）
+.pnpm-store
+
+# docker 自身产物
+Dockerfile*
+docker-compose*.yml
+.dockerignore
