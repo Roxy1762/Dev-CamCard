@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "locale": "zh-CN",
+  "cards": {
+    "starter_allowance": {
+      "name": "零花钱",
+      "body": "获得 2 资源。"
+    },
+    "starter_quarrel": {
+      "name": "争执",
+      "body": "获得 1 攻击。"
+    },
+    "starter_draft_paper": {
+      "name": "草稿纸",
+      "body": "摸 1 张牌。"
+    },
+    "starter_punctuality": {
+      "name": "守时",
+      "body": "获得 1 资源和 1 防备。"
+    }
+  }
+}

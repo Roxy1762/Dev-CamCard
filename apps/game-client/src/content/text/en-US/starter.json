@@ -1,0 +1,22 @@
+{
+  "schemaVersion": 1,
+  "locale": "en-US",
+  "cards": {
+    "starter_allowance": {
+      "name": "Allowance",
+      "body": "Gain 2 resources."
+    },
+    "starter_quarrel": {
+      "name": "Quarrel",
+      "body": "Gain 1 attack."
+    },
+    "starter_draft_paper": {
+      "name": "Draft Paper",
+      "body": "Draw 1 card."
+    },
+    "starter_punctuality": {
+      "name": "Punctuality",
+      "body": "Gain 1 resource and 1 block."
+    }
+  }
+}

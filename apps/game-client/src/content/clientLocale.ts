@@ -17,16 +17,16 @@
  */
 
 // ── zh-CN 文案（静态导入，Vite 构建时打包）────────────────────────────────────
-import zhCN_starter from "../../../../data/cards/text/zh-CN/starter.json";
-import zhCN_fixed from "../../../../data/cards/text/zh-CN/fixed-supplies.json";
-import zhCN_market from "../../../../data/cards/text/zh-CN/market-core.json";
-import zhCN_status from "../../../../data/cards/text/zh-CN/status.json";
+import zhCN_starter from "./text/zh-CN/starter.json";
+import zhCN_fixed from "./text/zh-CN/fixed-supplies.json";
+import zhCN_market from "./text/zh-CN/market-core.json";
+import zhCN_status from "./text/zh-CN/status.json";
 
 // ── en-US 文案（最小占位，覆盖后可替换）─────────────────────────────────────
-import enUS_starter from "../../../../data/cards/text/en-US/starter.json";
-import enUS_fixed from "../../../../data/cards/text/en-US/fixed-supplies.json";
-import enUS_market from "../../../../data/cards/text/en-US/market-core.json";
-import enUS_status from "../../../../data/cards/text/en-US/status.json";
+import enUS_starter from "./text/en-US/starter.json";
+import enUS_fixed from "./text/en-US/fixed-supplies.json";
+import enUS_market from "./text/en-US/market-core.json";
+import enUS_status from "./text/en-US/status.json";
 
 // ── 类型定义（与 @dev-camcard/schemas 的 CardTextFile 对应，不引入 fs 依赖）──
 
