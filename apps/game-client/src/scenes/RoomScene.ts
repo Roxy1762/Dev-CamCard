@@ -373,6 +373,16 @@ export class RoomScene extends Phaser.Scene {
       const card = hand[i];
       const cx = startX + i * (CARD_W + 4);
 
+      // 状态/压力牌：不可打出、不可安排，灰色显示并提示玩家其用途。
+      // 否则点击 PLAY_CARD 会被服务端拒绝，触发顶部错误旗，体验差。
+      if (vm.isStatusCard(card.id)) {
+        const label = vm.isPressureCard(card.id)
+          ? `${vm.getCardName(card.id)}\n(占位 · 需用清理效果)`
+          : `${vm.getCardName(card.id)}\n(状态牌 · 不可主动操作)`;
+        this.txtBox(cx, HAND_Y, CARD_W, CARD_H, label, 9, "#332222", "#aa6666");
+        continue;
+      }
+
       if (vm.isMyTurn) {
         const freeSlotIdx = vm.me.scheduleSlots.findIndex((s) => s === null);
 

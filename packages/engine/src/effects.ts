@@ -311,7 +311,10 @@ function applySingleEffect(
     }
 
     case "gainFaceUpCard":
-      // MVP 占位：gainFaceUpCard 需要明确牌源，暂时为 no-op
+      // 单玩家级别不处理：该效果在 isChoiceEffect() 中被识别为 choice 效果，
+      // 由 applyStateEffects → createPendingChoiceForEffect 走 choice 流程，
+      // 真正的执行在 resolveGainFaceUpCardDecision 中完成。
+      // 留空 case 仅为避免落入 default 分支时丢失 player。
       return player;
 
     case "createPressure":

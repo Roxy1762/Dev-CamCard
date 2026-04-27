@@ -148,4 +148,20 @@ describe("buildBoardViewModel", () => {
     expect(vm.me.name).toBe("测试者");
     expect(vm.opp.hp).toBe(18);
   });
+
+  it("isStatusCard / isPressureCard — 用于压力牌 UI 灰显", () => {
+    const vm = buildBoardViewModel(makePub(0), makePriv(0));
+
+    // 压力牌
+    expect(vm.isStatusCard("status_pressure")).toBe(true);
+    expect(vm.isPressureCard("status_pressure")).toBe(true);
+
+    // 其它 status_ 前缀（如未来扩展）一律视作不可主动操作
+    expect(vm.isStatusCard("status_curse")).toBe(true);
+    expect(vm.isPressureCard("status_curse")).toBe(false);
+
+    // 普通牌：可操作
+    expect(vm.isStatusCard("blue_draft_simulation")).toBe(false);
+    expect(vm.isPressureCard("blue_draft_simulation")).toBe(false);
+  });
 });

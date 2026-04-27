@@ -87,6 +87,17 @@ export interface BoardViewModel {
    * 否则降级返回 cardId（安全，不抛错）。
    */
   getCardName(cardId: string): string;
+
+  // ── 卡牌可操作性查询 ────────────────────────────────────────────
+  /**
+   * 该 cardId 是否为状态/压力等不可主动打出的牌。
+   * 用于让 UI 把这类牌渲染成灰色不可点击块，避免玩家盲点击触发服务端拒绝错误。
+   * 当前根据 cardId 前缀 "status_" 识别 —— 与引擎 createPressure 写入的
+   * `cardId: "status_pressure"`、以及 data/cards/rules/status.json 的命名约定一致。
+   */
+  isStatusCard(cardId: string): boolean;
+  /** 等价于 isStatusCard，专门标记压力牌（保留独立 API 以便将来细分）。 */
+  isPressureCard(cardId: string): boolean;
 }
 
 // ── 构建函数 ───────────────────────────────────────────────────────────────────
@@ -154,5 +165,23 @@ export function buildBoardViewModel(
     fixedSupplies: pub.fixedSupplies,
 
     getCardName: (cardId: string) => cardNames?.get(cardId) ?? cardId,
+    isStatusCard,
+    isPressureCard,
   };
+}
+
+// ── 状态卡判定 ────────────────────────────────────────────────────────────────
+
+/**
+ * 状态卡命名约定：cardId 以 "status_" 开头。
+ * 与引擎 effects.ts 写入压力牌时使用的 "status_pressure" 一致，
+ * 也覆盖了 data/cards/rules/status.json 的所有条目。
+ */
+export function isStatusCard(cardId: string): boolean {
+  return cardId.startsWith("status_");
+}
+
+/** 当前实现等同于 isStatusCard；后续若拆分状态牌再细化。 */
+export function isPressureCard(cardId: string): boolean {
+  return cardId === "status_pressure";
 }
