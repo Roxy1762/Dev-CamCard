@@ -4,6 +4,12 @@ import express from "express";
 import cors from "cors";
 import { GameRoom } from "./rooms/GameRoom";
 import { getPrisma, closePrisma } from "./prisma";
+import {
+  loadCardCatalog,
+  findCardInCatalog,
+  listSupportedLocales,
+  listRuleSets,
+} from "./cardCatalog";
 
 const port = Number(process.env.PORT ?? 2567);
 
@@ -147,6 +153,53 @@ app.get("/api/matches/:id/events", async (req, res) => {
   } catch (err) {
     console.error("[API] GET /api/matches/:id/events 失败:", err);
     res.status(500).json({ error: "查询失败" });
+  }
+});
+
+// ── 卡牌内容只读 API（运营后台用） ─────────────────────────────────────────────
+
+const SUPPORTED_LOCALES = new Set<string>(listSupportedLocales());
+
+function pickLocale(req: { query: { locale?: unknown } }): "zh-CN" | "en-US" {
+  const raw = typeof req.query.locale === "string" ? req.query.locale : "";
+  return SUPPORTED_LOCALES.has(raw) ? (raw as "zh-CN" | "en-US") : "zh-CN";
+}
+
+/**
+ * GET /api/cards?locale=zh-CN
+ * 返回当前规则数据 + 文案合并后的全量卡牌列表，供 admin 展示与运营。
+ */
+app.get("/api/cards", (req, res) => {
+  try {
+    const locale = pickLocale(req);
+    res.json({
+      locale,
+      ruleSets: listRuleSets(),
+      total: loadCardCatalog(locale).length,
+      cards: loadCardCatalog(locale),
+    });
+  } catch (err) {
+    console.error("[API] GET /api/cards 失败:", err);
+    res.status(500).json({ error: "卡牌数据加载失败" });
+  }
+});
+
+/**
+ * GET /api/cards/:id?locale=zh-CN
+ * 返回单张卡牌完整信息。
+ */
+app.get("/api/cards/:id", (req, res) => {
+  try {
+    const locale = pickLocale(req);
+    const card = findCardInCatalog(req.params.id, locale);
+    if (!card) {
+      res.status(404).json({ error: "卡牌不存在" });
+      return;
+    }
+    res.json(card);
+  } catch (err) {
+    console.error("[API] GET /api/cards/:id 失败:", err);
+    res.status(500).json({ error: "卡牌数据加载失败" });
   }
 });
 

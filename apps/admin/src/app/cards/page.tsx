@@ -1,7 +1,7 @@
-import MatchesDashboard from "./matches-dashboard";
-import { Nav } from "./nav";
+import { Nav } from "../nav";
+import CardsManager from "./cards-manager";
 
-export default function HomePage() {
+export default function CardsPage() {
   const apiBase =
     process.env.ADMIN_API_BASE ??
     process.env.NEXT_PUBLIC_API_BASE ??
@@ -18,8 +18,8 @@ export default function HomePage() {
         margin: "0 auto",
       }}
     >
-      <Nav current="matches" apiBase={apiBase} />
-      <MatchesDashboard apiBase={apiBase} />
+      <Nav current="cards" apiBase={apiBase} />
+      <CardsManager />
     </main>
   );
 }

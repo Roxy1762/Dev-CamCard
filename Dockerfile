@@ -66,7 +66,9 @@ CMD ["sh", "-c", "pnpm --filter @dev-camcard/server exec prisma migrate deploy &
 # ──────────────────────────────────────────────────────────────────────────────
 FROM full AS game-client-build
 ARG VITE_SERVER_URL=""
+ARG VITE_ADMIN_URL=""
 ENV VITE_SERVER_URL=${VITE_SERVER_URL}
+ENV VITE_ADMIN_URL=${VITE_ADMIN_URL}
 RUN pnpm --filter @dev-camcard/game-client build
 
 FROM nginx:1.27-alpine AS game-client
@@ -78,8 +80,11 @@ EXPOSE 80
 # Target: admin（next build → 同镜像复用 node_modules 启动）
 # ──────────────────────────────────────────────────────────────────────────────
 FROM full AS admin
+ARG NEXT_BASE_PATH=""
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
+# basePath 必须在 next build 时确定（运行期改 env 不会迁移生成的 _next/* URL）。
+ENV NEXT_BASE_PATH=${NEXT_BASE_PATH}
 RUN pnpm --filter @dev-camcard/admin build
 EXPOSE 3001
 CMD ["pnpm", "--filter", "@dev-camcard/admin", "start"]

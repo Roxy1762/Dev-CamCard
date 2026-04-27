@@ -29,31 +29,83 @@ function dedupeUrls(urls: string[]): string[] {
   return result;
 }
 
-function resolveDefaultServerUrls(): string[] {
-  const explicit = import.meta.env.VITE_SERVER_URL as string | undefined;
-  if (explicit) return dedupeUrls([explicit]);
+const LOOPBACK_HOSTS = new Set(["localhost", "127.0.0.1", "0.0.0.0", "[::1]", "::1"]);
 
-  if (typeof window === "undefined") {
-    return ["ws://localhost:2567"];
+function isLoopbackHost(host: string): boolean {
+  if (!host) return false;
+  const hostname = host.replace(/^\[/, "").replace(/\]$/, "").split(":")[0];
+  return LOOPBACK_HOSTS.has(hostname.toLowerCase());
+}
+
+function extractHostname(wsOrHttpUrl: string): string {
+  // 不依赖 URL 构造器，避免 ws:// 在某些环境下解析异常。
+  const stripped = wsOrHttpUrl
+    .replace(/^wss?:\/\//, "")
+    .replace(/^https?:\/\//, "");
+  const noPath = stripped.split("/")[0];
+  return noPath;
+}
+
+/**
+ * 计算客户端实际要尝试的 ws 候选地址。
+ *
+ * 关键约束（这是一类生产事故的根因）：
+ *  - VITE_SERVER_URL 在构建时被 Vite 烧入产物。一旦 .env 里写错（最常见的是
+ *    "ws://localhost:2567"），所有用户在公网域名打开页面时也只会去连本机
+ *    127.0.0.1，于是看到 "已尝试: ws://localhost:2567"。
+ *  - 解决：浏览器运行时检测页面 host，如果 explicit URL 指向 loopback 而页面
+ *    并不在 loopback 上，把 explicit URL 当作"显式坏配置"忽略，回退到按
+ *    window.location 推导的同域 + :2567 兜底。
+ *  - 同时，把按 window.location 推导出的候选地址也纳入返回，作为"explicit
+ *    虽然能解析但仍不通"的额外回退（只有 explicit 与 page-host 的 hostname
+ *    一致时才视为同一目标，避免重复尝试）。
+ */
+export function resolveDefaultServerUrls(): string[] {
+  const explicitRaw = (
+    typeof import.meta !== "undefined"
+      ? (import.meta.env?.VITE_SERVER_URL as string | undefined)
+      : undefined
+  )?.trim();
+
+  const isBrowser = typeof window !== "undefined" && !!window.location;
+
+  if (!isBrowser) {
+    return explicitRaw ? dedupeUrls([explicitRaw]) : ["ws://localhost:2567"];
   }
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const { hostname, host } = window.location;
   const sameHost = `${protocol}//${host}`;
   const host2567 = `${protocol}//${hostname}:2567`;
+  const pageOnLoopback = isLoopbackHost(host);
 
-  // Vite dev：优先尝试同 host（便于经反代访问），失败时回退到 :2567。
-  if (import.meta.env.DEV) {
-    return dedupeUrls([sameHost, host2567]);
+  // 在浏览器里访问公网域名时，明确忽略 explicit=loopback 的旧产物。
+  // 这种情况大多是开发者把 VITE_SERVER_URL=ws://localhost:2567 写进了 .env，
+  // 然后镜像里残留下来；再加上 mixed-content 阻断，就会"完全连不上"。
+  if (explicitRaw) {
+    const explicitHostname = extractHostname(explicitRaw);
+    const explicitOnLoopback = isLoopbackHost(explicitHostname);
+    if (explicitOnLoopback && !pageOnLoopback) {
+      // 直接走"同 host + :2567"兜底，不再使用错误的 explicit。
+      return dedupeUrls([sameHost, host2567]);
+    }
+    // explicit 看起来合理：优先尝试它，再附带 page-host 兜底。
+    return dedupeUrls([explicitRaw, sameHost, host2567]);
   }
 
-  // 生产构建：默认走同 host，由 nginx 把 /matchmake 与 /game_room 反代到 server。
-  // 同时保留 :2567 兜底，兼容“仅暴露 server 端口、未配置反代”的部署。
   return dedupeUrls([sameHost, host2567]);
 }
 
-const SERVER_URLS = resolveDefaultServerUrls();
-const SERVER_URL = SERVER_URLS[0] ?? "ws://localhost:2567";
+let serverUrlsCache: string[] | null = null;
+function getServerUrls(): string[] {
+  if (!serverUrlsCache) serverUrlsCache = resolveDefaultServerUrls();
+  return serverUrlsCache;
+}
+
+/** 测试钩子：清空模块级缓存，让下一次读取重新解析。 */
+export function __resetServerUrlsCacheForTests(): void {
+  serverUrlsCache = null;
+}
 
 /** localStorage key — 存储上次的 reconnectionToken */
 const STORAGE_KEY = "devCamCard_reconnectionToken";
@@ -71,7 +123,8 @@ export type ErrorHandler = (message: string) => void;
  *  - 客户端只发送 Command，不发送结算结果
  *
  * 重连支持：
- *  - joinOrCreate 成功后自动将 reconnectionToken 存入 localStorage
+ *  - joinOrCreate / create / joinById 成功后自动把 reconnectionToken 存进
+ *    localStorage
  *  - reconnect() 使用存储的 token 尝试重连
  *  - 重连成功后服务端会推送最新状态 + 事件日志
  */
@@ -103,22 +156,47 @@ export class RoomClient {
    */
   public onError: ErrorHandler | null = null;
 
-  constructor(serverUrl: string = SERVER_URL) {
-    this.client = new Client(serverUrl);
+  constructor(serverUrl?: string) {
+    const url = serverUrl ?? getServerUrls()[0] ?? "ws://localhost:2567";
+    this.client = new Client(url);
   }
 
   static getDefaultServerUrls(): string[] {
-    return [...SERVER_URLS];
+    return [...getServerUrls()];
   }
 
   /**
-   * 加入或创建房间，并注册内部状态转发。
+   * 加入或创建房间（快速匹配），并注册内部状态转发。
    */
   async joinOrCreate(
     roomName: string,
     options: Record<string, unknown>
   ): Promise<void> {
     this.room = await this.client.joinOrCreate(roomName, options);
+    this.saveReconnectionToken();
+    this.registerHandlers();
+  }
+
+  /**
+   * 强制创建一个新房间（用于"和朋友开房"场景，避免被自动塞进别人开的房间）。
+   */
+  async create(
+    roomName: string,
+    options: Record<string, unknown>
+  ): Promise<void> {
+    this.room = await this.client.create(roomName, options);
+    this.saveReconnectionToken();
+    this.registerHandlers();
+  }
+
+  /**
+   * 通过房间号加入指定房间。
+   */
+  async joinById(
+    roomId: string,
+    options: Record<string, unknown>
+  ): Promise<void> {
+    this.room = await this.client.joinById(roomId, options);
     this.saveReconnectionToken();
     this.registerHandlers();
   }
