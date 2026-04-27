@@ -49,13 +49,13 @@ export class BootScene extends Phaser.Scene {
     const cardNames = buildCardNames(DEFAULT_LOCALE);
 
     // 等待 state_update + private_update 均到达后再切换场景
-    const roomClient = new RoomClient();
+    let roomClient: RoomClient | null = null;
     let firstView: PublicMatchView | null = null;
     let firstPrivate: PrivatePlayerView | null = null;
     let transitioned = false;
 
     const tryTransition = () => {
-      if (transitioned || !firstView || !firstPrivate) return;
+      if (transitioned || !firstView || !firstPrivate || !roomClient) return;
       transitioned = true;
       this.scene.start("RoomScene", {
         view: firstView,
@@ -65,34 +65,48 @@ export class BootScene extends Phaser.Scene {
       });
     };
 
-    roomClient.onStateUpdate = (view: PublicMatchView) => {
-      firstView = view;
-      tryTransition();
-    };
-
-    roomClient.onPrivateUpdate = (pv: PrivatePlayerView) => {
-      firstPrivate = pv;
-      tryTransition();
-    };
-
     const connect = async () => {
-      // 若有存储的 reconnectionToken，先尝试重连
+      const serverUrls = RoomClient.getDefaultServerUrls();
       const hasToken = !!RoomClient.loadReconnectionToken();
-      if (hasToken) {
-        statusText.setText("检测到断线，尝试重连...");
+      let reconnectFailed = false;
+      let lastErr: unknown = null;
+
+      for (let i = 0; i < serverUrls.length; i++) {
+        const serverUrl = serverUrls[i];
+        roomClient = new RoomClient(serverUrl);
+        roomClient.onStateUpdate = (view: PublicMatchView) => {
+          firstView = view;
+          tryTransition();
+        };
+        roomClient.onPrivateUpdate = (pv: PrivatePlayerView) => {
+          firstPrivate = pv;
+          tryTransition();
+        };
+
+        const prefix = serverUrls.length > 1 ? `(${i + 1}/${serverUrls.length}) ` : "";
+        statusText.setText(`正在连接房间... ${prefix}${serverUrl}`);
+
         try {
-          await roomClient.reconnect();
-          statusText.setText("重连成功，恢复对局...");
-          return; // 成功：等待 state_update + private_update
-        } catch {
-          // token 过期或服务端已销毁房间：清理并重新加入
-          RoomClient.clearReconnectionToken();
-          statusText.setText("重连失败，正在加入新房间...");
+          if (hasToken && !reconnectFailed) {
+            statusText.setText(`检测到断线，尝试重连... ${prefix}${serverUrl}`);
+            await roomClient.reconnect();
+            statusText.setText("重连成功，恢复对局...");
+            return;
+          }
+
+          await roomClient.joinOrCreate("game_room", {});
+          return;
+        } catch (err) {
+          lastErr = err;
+          if (hasToken && !reconnectFailed) {
+            reconnectFailed = true;
+            RoomClient.clearReconnectionToken();
+            statusText.setText("重连失败，正在加入新房间...");
+          }
         }
       }
 
-      // 正常加入 / fallback
-      await roomClient.joinOrCreate("game_room", {});
+      throw lastErr ?? new Error("连接失败");
     };
 
     connect().catch((err: unknown) => {
