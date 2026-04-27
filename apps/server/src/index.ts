@@ -53,6 +53,37 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok", message: "房间服务已启动" });
 });
 
+/**
+ * GET /health/db
+ * 单独的数据库探针：执行一次 SELECT 1，硬超时 1.5s。
+ * 用途：
+ *  - 排查“server 起来了但没法保存对局”的网络/凭据问题
+ *  - 让运维端可以独立监控 DB 链路，而不必把主 /health 拖慢
+ */
+app.get("/health/db", async (_req, res) => {
+  const TIMEOUT_MS = 1500;
+  let timer: NodeJS.Timeout | null = null;
+  try {
+    const prisma = getPrisma();
+    const ping = prisma.$queryRaw`SELECT 1 AS ok`;
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => reject(new Error(`db ping 超时 (${TIMEOUT_MS}ms)`)),
+        TIMEOUT_MS
+      );
+    });
+    await Promise.race([ping, timeout]);
+    res.json({ status: "ok" });
+  } catch (err) {
+    res.status(503).json({
+      status: "down",
+      error: err instanceof Error ? err.message : String(err),
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+});
+
 // ── 只读对局 API ────────────────────────────────────────────────────────────────
 
 /**
