@@ -7,28 +7,53 @@ import type {
 } from "@dev-camcard/protocol";
 import { EVT } from "@dev-camcard/protocol";
 
-function resolveDefaultServerUrl(): string {
+function normalizeServerUrl(raw: string): string {
+  if (raw.startsWith("http://")) {
+    return `ws://${raw.slice("http://".length)}`;
+  }
+  if (raw.startsWith("https://")) {
+    return `wss://${raw.slice("https://".length)}`;
+  }
+  return raw;
+}
+
+function dedupeUrls(urls: string[]): string[] {
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const url of urls) {
+    const normalized = normalizeServerUrl(url.trim());
+    if (!normalized || seen.has(normalized)) continue;
+    seen.add(normalized);
+    result.push(normalized);
+  }
+  return result;
+}
+
+function resolveDefaultServerUrls(): string[] {
   const explicit = import.meta.env.VITE_SERVER_URL as string | undefined;
-  if (explicit) return explicit;
+  if (explicit) return dedupeUrls([explicit]);
 
   if (typeof window === "undefined") {
-    return "ws://localhost:2567";
+    return ["ws://localhost:2567"];
   }
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
   const { hostname, host } = window.location;
+  const sameHost = `${protocol}//${host}`;
+  const host2567 = `${protocol}//${hostname}:2567`;
 
-  // Vite dev：前端与 Colyseus 分端口运行（前端端口任意，server 固定 2567）。
+  // Vite dev：优先尝试同 host（便于经反代访问），失败时回退到 :2567。
   if (import.meta.env.DEV) {
-    return `${protocol}//${hostname}:2567`;
+    return dedupeUrls([sameHost, host2567]);
   }
 
   // 生产构建：默认走同 host，由 nginx 把 /matchmake 与 /game_room 反代到 server。
-  // 这样无论部署在 localhost、IP 还是域名上，浏览器都不需要直连 2567。
-  return `${protocol}//${host}`;
+  // 同时保留 :2567 兜底，兼容“仅暴露 server 端口、未配置反代”的部署。
+  return dedupeUrls([sameHost, host2567]);
 }
 
-const SERVER_URL = resolveDefaultServerUrl();
+const SERVER_URLS = resolveDefaultServerUrls();
+const SERVER_URL = SERVER_URLS[0] ?? "ws://localhost:2567";
 
 /** localStorage key — 存储上次的 reconnectionToken */
 const STORAGE_KEY = "devCamCard_reconnectionToken";
@@ -80,6 +105,10 @@ export class RoomClient {
 
   constructor(serverUrl: string = SERVER_URL) {
     this.client = new Client(serverUrl);
+  }
+
+  static getDefaultServerUrls(): string[] {
+    return [...SERVER_URLS];
   }
 
   /**

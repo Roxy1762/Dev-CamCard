@@ -10,7 +10,8 @@ const port = Number(process.env.PORT ?? 2567);
 function resolveAllowedOrigins(): string[] {
   const raw = process.env.CLIENT_ORIGIN?.trim();
   if (!raw) {
-    return ["http://localhost:5173", "http://localhost:3000"];
+    // 默认放行，避免“未设置 CLIENT_ORIGIN 时，公网/局域网客户端无法加入房间”。
+    return ["*"];
   }
   return raw
     .split(",")
