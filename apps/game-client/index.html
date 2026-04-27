@@ -10,13 +10,199 @@
         padding: 0;
         box-sizing: border-box;
       }
+      html,
       body {
-        background: #000;
-        overflow: hidden;
+        height: 100%;
+        background: #0f0f1e;
+        color: #f5f5fa;
+        font-family: "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
+        overflow: auto;
+      }
+      #game {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      #lobby {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 48px 24px 32px;
+        display: flex;
+        flex-direction: column;
+        gap: 24px;
+        min-height: 100vh;
+      }
+      #lobby header h1 {
+        font-size: 28px;
+        letter-spacing: 0.05em;
+      }
+      #lobby header p {
+        margin-top: 8px;
+        color: #9b9bbf;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      .panel {
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        border-radius: 12px;
+        padding: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .panel h2 {
+        font-size: 16px;
+        color: #c0c0e6;
+        font-weight: 600;
+      }
+      .panel-row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+        align-items: center;
+      }
+      input[type="text"] {
+        flex: 1 1 180px;
+        padding: 10px 12px;
+        font-size: 14px;
+        background: #1c1c33;
+        color: #f5f5fa;
+        border: 1px solid #2c2c4a;
+        border-radius: 8px;
+        outline: none;
+      }
+      input[type="text"]:focus {
+        border-color: #5b8cff;
+      }
+      button {
+        padding: 10px 16px;
+        font-size: 14px;
+        font-weight: 600;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        background: #3a5cff;
+        color: #fff;
+        transition: filter 0.15s ease, transform 0.05s ease;
+      }
+      button:hover:not(:disabled) {
+        filter: brightness(1.1);
+      }
+      button:active:not(:disabled) {
+        transform: translateY(1px);
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
+      button.secondary {
+        background: #2c2c4a;
+        color: #d8d8ee;
+      }
+      .status {
+        font-size: 13px;
+        color: #9b9bbf;
+        min-height: 18px;
+        line-height: 1.6;
+      }
+      .status.error {
+        color: #ff6b7a;
+        white-space: pre-line;
+      }
+      .footer-links {
+        margin-top: auto;
+        padding-top: 24px;
+        font-size: 12px;
+        color: #6f6f9a;
+        display: flex;
+        gap: 16px;
+        flex-wrap: wrap;
+        border-top: 1px solid rgba(255, 255, 255, 0.06);
+      }
+      .footer-links a {
+        color: #8aa8ff;
+        text-decoration: none;
+      }
+      .footer-links a:hover {
+        text-decoration: underline;
+      }
+      .room-id-display {
+        font-family: ui-monospace, "JetBrains Mono", monospace;
+        font-size: 16px;
+        color: #ffd86b;
+        letter-spacing: 0.08em;
+        background: #1c1c33;
+        padding: 8px 12px;
+        border-radius: 6px;
+        display: inline-block;
+        user-select: all;
+      }
+      .hidden {
+        display: none !important;
       }
     </style>
   </head>
   <body>
+    <div id="lobby">
+      <header>
+        <h1>Dev-CamCard · 课表风暴</h1>
+        <p>1v1 卡牌对战原型。先取一个昵称，然后选择「快速匹配」「创建房间」或「输入房间号加入」。</p>
+      </header>
+
+      <section class="panel">
+        <h2>玩家昵称</h2>
+        <div class="panel-row">
+          <input
+            id="player-name"
+            type="text"
+            placeholder="例如：天天"
+            maxlength="16"
+            autocomplete="nickname"
+          />
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>快速匹配</h2>
+        <p class="status">直接被分配到任意有空位的房间，没有空位就开新房。</p>
+        <div class="panel-row">
+          <button id="quick-match" type="button">快速匹配</button>
+        </div>
+      </section>
+
+      <section class="panel">
+        <h2>和朋友开房</h2>
+        <p class="status">点击创建后会拿到一个房间号，把它发给对方让对方加入。</p>
+        <div class="panel-row">
+          <button id="create-room" type="button">创建房间</button>
+          <span id="created-room-id" class="room-id-display hidden"></span>
+        </div>
+        <div class="panel-row">
+          <input
+            id="join-room-id"
+            type="text"
+            placeholder="输入房间号加入..."
+            autocapitalize="characters"
+            autocomplete="off"
+          />
+          <button id="join-room" type="button" class="secondary">加入房间</button>
+        </div>
+      </section>
+
+      <div id="lobby-status" class="status"></div>
+
+      <div class="footer-links">
+        <a id="admin-link" href="" target="_blank" rel="noopener">运营后台</a>
+        <a href="/health" target="_blank" rel="noopener">服务健康检查</a>
+        <a href="/api/matches" target="_blank" rel="noopener">对局 API</a>
+        <a href="/api/cards" target="_blank" rel="noopener">卡牌 API</a>
+      </div>
+    </div>
+
+    <div id="game" class="hidden"></div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

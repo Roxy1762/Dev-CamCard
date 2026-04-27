@@ -60,10 +60,13 @@ PUBLIC_HOST="${PUBLIC_HOST:-localhost}"
 print_endpoints() {
   cat <<EOF
 [deploy] 服务已启动。
-        游戏前端     http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}
+        玩家主页面    http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}
         Colyseus     ws://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/game_room   (经 nginx 同域反代)
+        对局 API      http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/api/matches
+        卡牌 API      http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/api/cards
         Server 健康   http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/health
-        运营后台     http://${PUBLIC_HOST}:${ADMIN_HOST_PORT:-3001}
+        运营后台     http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/admin   (经 nginx 同域反代)
+        （直连入口） http://${PUBLIC_HOST}:${ADMIN_HOST_PORT:-3001}/admin
         （可选直连） http://${PUBLIC_HOST}:${SERVER_HOST_PORT:-2567}/health
 EOF
 }

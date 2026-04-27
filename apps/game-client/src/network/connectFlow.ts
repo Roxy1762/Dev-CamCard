@@ -11,17 +11,26 @@
 
 export interface ConnectableClient {
   reconnect(): Promise<void>;
+  /** 兼容旧调用：默认 join 行为（快速匹配）。 */
   joinOrCreate(roomName: string, options: Record<string, unknown>): Promise<void>;
   /** 主动释放底层连接 / 监听器。重复调用应安全。 */
   leave(): void;
 }
+
+/** 用于把"创建 / 加入指定房间 / 快速匹配"区分开。 */
+export type JoinAction<C extends ConnectableClient> = (client: C) => Promise<void>;
 
 export interface ConnectFlowOptions<C extends ConnectableClient> {
   urls: string[];
   hasToken: boolean;
   clearToken: () => void;
   createClient: (url: string) => C;
-  /** 单次 reconnect / joinOrCreate 的硬超时。默认 8000ms。 */
+  /**
+   * 自定义 join 行为；缺省走 joinOrCreate("game_room", {})，与旧调用兼容。
+   * 由 lobby 决定具体是 joinOrCreate / create / joinById。
+   */
+  joinAction?: JoinAction<C>;
+  /** 单次 reconnect / join 的硬超时。默认 8000ms。 */
   perUrlTimeoutMs?: number;
   onStatus?: (message: string) => void;
   /** 注入定时器（测试用）；默认走 globalThis 的 setTimeout/clearTimeout。 */
@@ -32,7 +41,7 @@ export interface ConnectFlowOptions<C extends ConnectableClient> {
 export interface ConnectFlowResult<C extends ConnectableClient> {
   client: C;
   url: string;
-  /** 在 reconnect 失败后是否走了 joinOrCreate 兜底。 */
+  /** 在 reconnect 失败后是否走了 join 兜底。 */
   fellBackToJoin: boolean;
 }
 
@@ -44,6 +53,8 @@ export async function connectWithFallback<C extends ConnectableClient>(
   const timeoutMs = opts.perUrlTimeoutMs ?? DEFAULT_TIMEOUT_MS;
   const setT = opts.setTimeoutFn ?? ((fn, ms) => setTimeout(fn, ms));
   const clearT = opts.clearTimeoutFn ?? ((h) => clearTimeout(h as ReturnType<typeof setTimeout>));
+  const joinAction: JoinAction<C> =
+    opts.joinAction ?? ((client) => client.joinOrCreate("game_room", {}));
 
   const withTimeout = <T,>(p: Promise<T>, label: string): Promise<T> =>
     new Promise<T>((resolve, reject) => {
@@ -100,7 +111,7 @@ export async function connectWithFallback<C extends ConnectableClient>(
     }
 
     try {
-      await withTimeout(current.joinOrCreate("game_room", {}), "加入房间");
+      await withTimeout(joinAction(current), "加入房间");
       return { client: current, url, fellBackToJoin };
     } catch (err) {
       lastErr = err;
@@ -148,6 +159,13 @@ export function describeConnectError(err: unknown): string {
   }
   if (lower.includes("failed to fetch") || lower.includes("network")) {
     return `${raw}（网络不可达：DNS/防火墙/反代未配置？）`;
+  }
+  if (
+    lower.includes("not found") ||
+    lower.includes("no rooms found") ||
+    lower.includes("invalid room")
+  ) {
+    return `${raw}（房间号无效或房间已满，请确认房号或让对方重新创建）`;
   }
   return raw || "连接服务器失败（未知错误）";
 }

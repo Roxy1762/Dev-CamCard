@@ -7,11 +7,13 @@
 # 服务：
 #   postgres     – Prisma 数据库
 #   server       – Colyseus + Express（2567）
-#   game-client  – Phaser 静态站（nginx，3000，同时 /matchmake 与 /game_room 反代到 server）
-#   admin        – Next.js 运营后台（3001）
+#   game-client  – Phaser 静态站 + nginx（80），同时把 /matchmake、/game_room、
+#                  /api/、/admin/ 反代到 server / admin
+#   admin        – Next.js 运营后台（3001）；公网部署可不暴露端口，由 nginx 反代
 #
-# 同域访问：浏览器只需访问游戏前端端口（默认 3000），ws / API 由 nginx 反代到 server。
-# 因此公网部署时只需放行 3000（与 3001 后台）即可，不必额外暴露 2567。
+# 同域访问：浏览器只需访问游戏前端端口（默认 3000），ws / API / admin 全部由
+# nginx 反代到对应容器。因此公网部署时只需放行 3000（或 80/443，视 HTTPS 前置而定），
+# 不必额外暴露 2567 与 3001。
 
 x-build: &shared-build
   context: .
@@ -63,22 +65,36 @@ services:
       args:
         # 留空 → 客户端按 window.location 自动推导 ws 地址（走同域 nginx 反代）。
         # 如需强制指向独立 ws 端点，可在 .env 显式设置（例：wss://play.example.com）。
+        # ⚠ 不要写 ws://localhost:2567，否则公网用户全部连不上自己机器。
         VITE_SERVER_URL: ${VITE_SERVER_URL:-}
+        # 运营后台访问入口（lobby 页脚链接）。
+        # 留空 → 按 window.location 推断同 host 的 :3001（适合内网/IP 部署）。
+        # 同域反代部署填 "/admin"；独立子域名填 "https://admin.example.com"。
+        VITE_ADMIN_URL: ${VITE_ADMIN_URL:-/admin}
     restart: unless-stopped
     ports:
       - "${CLIENT_HOST_PORT:-3000}:80"
     depends_on:
       - server
+      - admin
 
   admin:
     build:
       <<: *shared-build
       target: admin
+      args:
+        # 与下面 environment 里的 NEXT_BASE_PATH 保持一致（Next.js 的 basePath
+        # 必须在 build 时确定，build 后再改 env 不会生效）。
+        NEXT_BASE_PATH: ${NEXT_BASE_PATH:-/admin}
     restart: unless-stopped
     environment:
       ADMIN_API_BASE: ${ADMIN_API_BASE:-http://server:2567}
       NEXT_PUBLIC_API_BASE: ${NEXT_PUBLIC_API_BASE:-}
+      # 同域反代部署：保持 /admin；独立端口部署可置空。
+      NEXT_BASE_PATH: ${NEXT_BASE_PATH:-/admin}
     ports:
+      # 同域反代场景下 admin 端口不必对外，公网防火墙只放行 game-client 即可。
+      # 仍然映射到宿主机是为了开发期 / 内网调试方便（直连 :3001 + basePath）。
       - "${ADMIN_HOST_PORT:-3001}:3001"
     depends_on:
       - server
