@@ -16,14 +16,15 @@ function resolveDefaultServerUrl(): string {
   }
 
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-  const { hostname, host, port } = window.location;
+  const { hostname, host } = window.location;
 
-  // 本地开发时默认 Phaser/Vite 与 Colyseus 分端口运行。
-  if (port === "5173" || port === "4173" || port === "3000") {
+  // Vite dev：前端与 Colyseus 分端口运行（前端端口任意，server 固定 2567）。
+  if (import.meta.env.DEV) {
     return `${protocol}//${hostname}:2567`;
   }
 
-  // 线上默认走同 host，同协议映射 ws/wss。
+  // 生产构建：默认走同 host，由 nginx 把 /matchmake 与 /game_room 反代到 server。
+  // 这样无论部署在 localhost、IP 还是域名上，浏览器都不需要直连 2567。
   return `${protocol}//${host}`;
 }
 

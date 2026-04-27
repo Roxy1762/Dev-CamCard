@@ -19,9 +19,11 @@ function resolveAllowedOrigins(): string[] {
 }
 
 const allowedOrigins = resolveAllowedOrigins();
+const allowAnyOrigin = allowedOrigins.includes("*");
 
 const app = express();
-// 允许来自 Phaser 开发服务器与部署前端的跨域请求
+// 允许来自 Phaser 开发服务器与部署前端的跨域请求。
+// CLIENT_ORIGIN=* 时放行任意来源（自托管 / 局域网 IP / 域名混用场景）。
 app.use(
   cors({
     origin(origin, callback) {
@@ -31,7 +33,7 @@ app.use(
         return;
       }
 
-      if (allowedOrigins.includes(origin)) {
+      if (allowAnyOrigin || allowedOrigins.includes(origin)) {
         callback(null, true);
         return;
       }
