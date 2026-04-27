@@ -4,8 +4,9 @@
 # 作用：
 #   1. 确保 .env 存在（缺失时从 .env.example 复制）
 #   2. 选择可用的 docker compose CLI（plugin 或 legacy docker-compose）
-#   3. build + up -d 全部服务
-#   4. 打印健康检查与访问入口
+#   3. 启用 BuildKit（pnpm 缓存 mount + 多 target 共享 deps 必须）
+#   4. build + up -d 全部服务
+#   5. 打印健康检查与访问入口
 #
 # 用法：
 #   scripts/deploy.sh              # 默认：build + up -d
@@ -13,6 +14,7 @@
 #   scripts/deploy.sh destroy      # 停止并删除数据卷（危险）
 #   scripts/deploy.sh logs         # tail 全部服务日志
 #   scripts/deploy.sh migrate      # 只跑一次数据库迁移
+#   scripts/deploy.sh ps           # 查看容器状态
 
 set -euo pipefail
 
@@ -20,6 +22,10 @@ ROOT_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT_DIR"
 
 CMD="${1:-up}"
+
+# BuildKit 必须开启：pnpm cache mount + 多 target 共享 deps 才能生效。
+export DOCKER_BUILDKIT=1
+export COMPOSE_DOCKER_CLI_BUILD=1
 
 if docker compose version >/dev/null 2>&1; then
   DC=(docker compose)
@@ -40,15 +46,33 @@ if [[ ! -f .env ]]; then
   fi
 fi
 
+# 读取 .env 中的端口（仅用于打印访问地址，不影响 compose 自身解析）。
+# shellcheck disable=SC1091
+set -a; source .env 2>/dev/null || true; set +a
+
+# 公网部署时希望打印真实访问地址：优先取 PUBLIC_HOST，否则 hostname -I 第一项，最后回落 localhost。
+PUBLIC_HOST="${PUBLIC_HOST:-}"
+if [[ -z "$PUBLIC_HOST" ]]; then
+  PUBLIC_HOST="$(hostname -I 2>/dev/null | awk '{print $1}')"
+fi
+PUBLIC_HOST="${PUBLIC_HOST:-localhost}"
+
+print_endpoints() {
+  cat <<EOF
+[deploy] 服务已启动。
+        游戏前端     http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}
+        Colyseus     ws://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/game_room   (经 nginx 同域反代)
+        Server 健康   http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/health
+        运营后台     http://${PUBLIC_HOST}:${ADMIN_HOST_PORT:-3001}
+        （可选直连） http://${PUBLIC_HOST}:${SERVER_HOST_PORT:-2567}/health
+EOF
+}
+
 case "$CMD" in
   up|"")
-    echo "[deploy] 构建并启动全部服务..."
+    echo "[deploy] 构建并启动全部服务（BuildKit + 共享 deps）..."
     "${DC[@]}" up -d --build
-    echo "[deploy] 服务已启动。"
-    echo "          游戏前端     http://localhost:${CLIENT_HOST_PORT:-3000}"
-    echo "          Colyseus     ws://localhost:${SERVER_PORT:-2567}"
-    echo "          Server 健康   http://localhost:${SERVER_PORT:-2567}/health"
-    echo "          运营后台     http://localhost:${ADMIN_HOST_PORT:-3001}"
+    print_endpoints
     ;;
   down)
     "${DC[@]}" down

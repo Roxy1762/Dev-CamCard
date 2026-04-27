@@ -15,27 +15,45 @@
 
 ## 一分钟部署（Docker）
 
-只需要本机装好 Docker Engine + Compose 插件：
+只需要本机装好 Docker Engine + Compose 插件（**必须开启 BuildKit**，2022 年之后的 Docker 默认即开）：
 
 ```bash
 git clone <repo> dev-camcard && cd dev-camcard
 cp .env.example .env          # 按需改密码/端口；脚本缺省会自动复制
-scripts/deploy.sh             # build + up -d，首次约 2~3 分钟
+scripts/deploy.sh             # build + up -d
 ```
 
-启动完成后：
+启动完成后（无论部署在 localhost、内网 IP 还是公网域名，浏览器都能直接连）：
 
 | 入口 | 地址 |
 | --- | --- |
-| 游戏前端（Phaser） | <http://localhost:3000> |
-| Colyseus 房间服务 | ws://localhost:2567 |
-| Server 健康检查   | <http://localhost:2567/health> |
-| 只读对局 API      | <http://localhost:2567/api/matches> |
-| 运营后台（Next.js）| <http://localhost:3001> |
+| 游戏前端（Phaser） | <http://${HOST}:3000> |
+| Colyseus 房间服务 | ws://${HOST}:3000/game_room *(经 nginx 同域反代)* |
+| Server 健康检查   | <http://${HOST}:3000/health> *(经 nginx 同域反代)* |
+| 只读对局 API      | <http://${HOST}:3000/api/matches> *(经 nginx 同域反代)* |
+| 运营后台（Next.js）| <http://${HOST}:3001> |
 
-打开 <http://localhost:3000>，**两个浏览器标签页 / 两台设备各开一次** 就会被 Colyseus 匹配到同一张 `game_room`，进入 1v1 对局。
+打开游戏前端地址，**两个浏览器标签页 / 两台设备各开一次** 就会被 Colyseus 匹配到同一张 `game_room`，进入 1v1 对局。
 
+> 公网部署只需放行 **3000** 与 **3001**，2567 默认已经走 nginx 同域反代，不必额外暴露。
+>
 > 数据库迁移在 server 容器启动时自动 `prisma migrate deploy`，首次启动会建好全部表结构。
+
+### 为什么是 “同域”？
+
+游戏前端镜像内的 nginx 既托管 Phaser 静态产物，也把 `/matchmake/*` 与 `/game_room/*` 反代到容器内的 server:2567。客户端 `RoomClient` 在生产构建里默认用 `window.location.host` 推导 ws 地址，因此你访问哪个 host 就连哪个 host —— 不会再出现 “部署在 IP 上但客户端硬编码到 localhost:2567 → 网络不可达” 的问题。
+
+如果确实需要前端连接到独立的 server 端点（例如多机部署），在 `.env` 里设置 `VITE_SERVER_URL=wss://your-server-host` 重新构建即可。
+
+### 构建为什么变快？
+
+旧版三个服务各有独立 Dockerfile，每个都跑一次 `pnpm install --frozen-lockfile`，冷构建会做三遍 ≈ 21 分钟。新版用单一 `Dockerfile` 多 target：
+
+- `deps` 阶段执行一次 `pnpm install`，被 `server` / `game-client` / `admin` 三个 target 复用（BuildKit 自动复用 layer）。
+- pnpm store 用 `--mount=type=cache` 缓存，二次构建几乎零下载。
+- apk 同样使用 cache mount。
+
+冷构建从 ≈ 17 分钟降到 ≈ 5 分钟（视网络），二次 / 增量构建只编译改动到的服务。
 
 ## 本地开发
 
@@ -88,14 +106,14 @@ pnpm typecheck
 | --- | --- | --- |
 | `POSTGRES_USER/PASSWORD/DB` | Postgres 凭据 | camcard/camcard/camcard |
 | `POSTGRES_HOST_PORT` | 宿主机暴露端口 | 5432 |
-| `SERVER_PORT` | server 端口（宿主机 & 容器） | 2567 |
-| `CLIENT_ORIGIN` | server CORS 白名单，逗号分隔 | http://localhost:3000,http://localhost:3001 |
-| `VITE_SERVER_URL` | 构建期注入客户端的 WS 地址 | ws://localhost:2567 |
+| `SERVER_HOST_PORT` | server 暴露给宿主机的端口（容器内固定 2567） | 2567 |
+| `CLIENT_ORIGIN` | server CORS 白名单，`*` 放行任意来源，或逗号分隔白名单 | `*` |
+| `VITE_SERVER_URL` | 构建期注入客户端的 WS 地址；留空 → 同域反代 | *(空)* |
 | `CLIENT_HOST_PORT` | 游戏前端宿主机端口 | 3000 |
 | `ADMIN_HOST_PORT` | 后台宿主机端口 | 3001 |
-| `NEXT_PUBLIC_API_BASE` | 后台调用 server API 的地址 | http://localhost:2567 |
+| `NEXT_PUBLIC_API_BASE` | 后台调用 server API 的地址 | *(空，走容器内部 server:2567)* |
 
-> 同域部署（单端口）：把 `VITE_SERVER_URL=` 留空重建 game-client，nginx 会把 `/game_room` ws 与 `/matchmake` HTTP 反代到 server，客户端自动以 `window.location` 推导地址。
+> 默认就是 “同域单端口” 部署：`VITE_SERVER_URL` 留空 → 客户端按 `window.location` 推导 → nginx 把 `/game_room` ws 与 `/matchmake` HTTP 反代到 server。线上需要锁紧 CORS 时把 `CLIENT_ORIGIN` 换成具体域名列表即可。
 
 ## 常用运维动作
 

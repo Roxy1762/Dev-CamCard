@@ -7,8 +7,15 @@
 # 服务：
 #   postgres     – Prisma 数据库
 #   server       – Colyseus + Express（2567）
-#   game-client  – Phaser 静态站（nginx，3000）
-#   admin        – Next.js 运营后台（3001，可选）
+#   game-client  – Phaser 静态站（nginx，3000，同时 /matchmake 与 /game_room 反代到 server）
+#   admin        – Next.js 运营后台（3001）
+#
+# 同域访问：浏览器只需访问游戏前端端口（默认 3000），ws / API 由 nginx 反代到 server。
+# 因此公网部署时只需放行 3000（与 3001 后台）即可，不必额外暴露 2567。
+
+x-build: &shared-build
+  context: .
+  dockerfile: Dockerfile
 
 services:
   postgres:
@@ -30,15 +37,16 @@ services:
 
   server:
     build:
-      context: .
-      dockerfile: apps/server/Dockerfile
+      <<: *shared-build
+      target: server
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-camcard}:${POSTGRES_PASSWORD:-camcard}@postgres:5432/${POSTGRES_DB:-camcard}
-      PORT: ${SERVER_PORT:-2567}
-      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-http://localhost:3000,http://localhost:3001}
+      # 容器固定监听 2567；外部端口由 SERVER_HOST_PORT 决定
+      PORT: "2567"
+      CLIENT_ORIGIN: ${CLIENT_ORIGIN:-*}
     ports:
-      - "${SERVER_PORT:-2567}:2567"
+      - "${SERVER_HOST_PORT:-2567}:2567"
     depends_on:
       postgres:
         condition: service_healthy
@@ -50,10 +58,12 @@ services:
 
   game-client:
     build:
-      context: .
-      dockerfile: apps/game-client/Dockerfile
+      <<: *shared-build
+      target: game-client
       args:
-        VITE_SERVER_URL: ${VITE_SERVER_URL:-ws://localhost:2567}
+        # 留空 → 客户端按 window.location 自动推导 ws 地址（走同域 nginx 反代）。
+        # 如需强制指向独立 ws 端点，可在 .env 显式设置（例：wss://play.example.com）。
+        VITE_SERVER_URL: ${VITE_SERVER_URL:-}
     restart: unless-stopped
     ports:
       - "${CLIENT_HOST_PORT:-3000}:80"
@@ -62,8 +72,8 @@ services:
 
   admin:
     build:
-      context: .
-      dockerfile: apps/admin/Dockerfile
+      <<: *shared-build
+      target: admin
     restart: unless-stopped
     environment:
       ADMIN_API_BASE: ${ADMIN_API_BASE:-http://server:2567}
