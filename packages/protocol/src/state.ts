@@ -1,19 +1,11 @@
-import type { PlayerSide } from "./enums";
-
 /**
- * InternalMatchState — 最小可扩展骨架。
+ * （历史骨架已移除）
  *
- * 仅服务端持有，禁止直接同步给客户端（technical-decisions.md）。
- * 后续任务 3 将在 packages/engine 中扩展此接口的完整字段。
+ * 早期版本曾在此处声明 `InternalMatchState`。真正生效的完整定义位于
+ * `packages/engine/src/types.ts`，由服务端直接消费；客户端只接收
+ * `views.ts` 暴露的 PublicMatchView / PrivatePlayerView。
+ *
+ * 这里保留空文件只为兼容历史 `index.ts` 的 `export * from "./state"`，
+ * 防止外部 import 路径被打破。
  */
-export interface InternalMatchState {
-  roomId: string;
-  rulesetId: string;
-  turnNumber: number;
-  activePlayer: PlayerSide;
-  /** 比赛是否已开始（双方 READY 后） */
-  started: boolean;
-  ended: boolean;
-  winner: PlayerSide | null;
-  // TODO (任务 3)：添加完整牌堆 / 手牌 / 商店 / 日程槽 / 预约位字段
-}
+export {};

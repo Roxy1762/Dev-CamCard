@@ -1,5 +1,6 @@
 import Phaser from "phaser";
 import { RoomClient } from "../network/RoomClient";
+import { connectWithFallback, describeConnectError } from "../network/connectFlow";
 import type { PublicMatchView, PrivatePlayerView } from "@dev-camcard/protocol";
 import { preloadRuntimePlaceholders } from "../assets/runtimeAssets";
 import { buildCardNames, DEFAULT_LOCALE } from "../content/clientLocale";
@@ -65,68 +66,38 @@ export class BootScene extends Phaser.Scene {
       });
     };
 
-    const connect = async () => {
-      const serverUrls = RoomClient.getDefaultServerUrls();
-      const hasToken = !!RoomClient.loadReconnectionToken();
-      let reconnectFailed = false;
-      let lastErr: unknown = null;
-
-      for (let i = 0; i < serverUrls.length; i++) {
-        const serverUrl = serverUrls[i];
-        roomClient = new RoomClient(serverUrl);
-        roomClient.onStateUpdate = (view: PublicMatchView) => {
+    connectWithFallback<RoomClient>({
+      urls: RoomClient.getDefaultServerUrls(),
+      hasToken: !!RoomClient.loadReconnectionToken(),
+      clearToken: () => RoomClient.clearReconnectionToken(),
+      createClient: (url) => {
+        const c = new RoomClient(url);
+        c.onStateUpdate = (view: PublicMatchView) => {
           firstView = view;
           tryTransition();
         };
-        roomClient.onPrivateUpdate = (pv: PrivatePlayerView) => {
+        c.onPrivateUpdate = (pv: PrivatePlayerView) => {
           firstPrivate = pv;
           tryTransition();
         };
-
-        const prefix = serverUrls.length > 1 ? `(${i + 1}/${serverUrls.length}) ` : "";
-        statusText.setText(`正在连接房间... ${prefix}${serverUrl}`);
-
-        try {
-          if (hasToken && !reconnectFailed) {
-            statusText.setText(`检测到断线，尝试重连... ${prefix}${serverUrl}`);
-            await roomClient.reconnect();
-            statusText.setText("重连成功，恢复对局...");
-            return;
-          }
-
-          await roomClient.joinOrCreate("game_room", {});
-          return;
-        } catch (err) {
-          lastErr = err;
-          if (hasToken && !reconnectFailed) {
-            reconnectFailed = true;
-            RoomClient.clearReconnectionToken();
-            statusText.setText("重连失败，正在加入新房间...");
-          }
-        }
-      }
-
-      throw lastErr ?? new Error("连接失败");
-    };
-
-    connect().catch((err: unknown) => {
-      let msg: string;
-      if (err instanceof Error) {
-        msg = err.message;
-      } else if (typeof err === "object" && err !== null) {
-        const anyErr = err as Record<string, unknown>;
-        if (typeof anyErr.message === "string" && anyErr.message) {
-          msg = anyErr.message;
-        } else if (typeof anyErr.code === "number") {
-          msg = `连接失败 (code ${anyErr.code})`;
-        } else {
-          msg = "连接服务器失败（网络不可达）";
-        }
-      } else {
-        msg = String(err);
-      }
-      statusText.setText(`连接失败: ${msg}`);
-      statusText.setColor("#ff6666");
-    });
+        return c;
+      },
+      onStatus: (m) => statusText.setText(m),
+    })
+      .then((result) => {
+        roomClient = result.client;
+        statusText.setText(
+          result.fellBackToJoin ? "已加入新房间，等待开局..." : "已连接，等待开局..."
+        );
+        // 若状态消息已先到达（很常见），立刻触发切换。
+        tryTransition();
+      })
+      .catch((err: unknown) => {
+        const msg = describeConnectError(err);
+        const tried = RoomClient.getDefaultServerUrls().join("  /  ");
+        statusText.setText(`连接失败: ${msg}\n已尝试: ${tried}`);
+        statusText.setColor("#ff6666");
+        statusText.setLineSpacing(4);
+      });
   }
 }
