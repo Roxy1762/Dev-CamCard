@@ -10,7 +10,12 @@ export default defineConfig({
         target: "http://127.0.0.1:2567",
         changeOrigin: true,
       },
-      "/game_room": {
+      // Colyseus 0.15 的 ws 实际路径是 /<processId>/<roomId>，两段都是
+      // nanoid(9) 生成的随机串。旧的 "/game_room" 前缀根本不会被命中，
+      // 客户端 ws 握手永远走不通，触发 8000ms 加入房间超时。
+      // 这里用与 Colyseus 服务端解析路径相同的字符集做正则匹配，并加上长度
+      // 下限以避免把 vite SPA 路径（/lobby/login 之类）误判成 ws 握手。
+      "^/[A-Za-z0-9_-]{6,21}/[A-Za-z0-9_-]{6,21}/?$": {
         target: "http://127.0.0.1:2567",
         changeOrigin: true,
         ws: true,
