@@ -13,6 +13,10 @@ import { startLobby, showGameView, type LobbyConnection } from "./lobby/lobby";
 
 let phaserGame: Phaser.Game | null = null;
 
+/** 牌桌基础逻辑分辨率 — 所有场景内部坐标按此尺寸编排，Scale.FIT 负责适配显示设备。 */
+const BASE_WIDTH = 900;
+const BASE_HEIGHT = 640;
+
 function bootPhaser(conn: LobbyConnection): void {
   showGameView();
 
@@ -24,11 +28,25 @@ function bootPhaser(conn: LobbyConnection): void {
 
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
-    width: 900,
-    height: 640,
     backgroundColor: "#0f0f1e",
     scene: [BootScene, RoomScene, ReplayScene],
     parent: "game",
+    // FIT 模式：保留逻辑尺寸（坐标稳定），按比例缩放至容器；CENTER_BOTH 居中。
+    // 这样既能适配手机 / iPad / 桌面浏览器多种屏幕，也避免重写所有布局坐标。
+    scale: {
+      mode: Phaser.Scale.FIT,
+      autoCenter: Phaser.Scale.CENTER_BOTH,
+      width: BASE_WIDTH,
+      height: BASE_HEIGHT,
+      parent: "game",
+    },
+    // 反走样 + 不强制四舍五入像素 → 字体在高 DPI 屏（iPad / Retina）下不再糊。
+    // 配合 BaseScene 的 setResolution(devicePixelRatio) 才是完整解法。
+    render: {
+      antialias: true,
+      roundPixels: false,
+      pixelArt: false,
+    },
   };
 
   phaserGame = new Phaser.Game(config);

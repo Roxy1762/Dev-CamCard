@@ -9,7 +9,7 @@
  *  5. ViewModel getCardName 消费真实内容层名字（闭环测试）
  */
 import { describe, it, expect } from "vitest";
-import { buildCardNames, DEFAULT_LOCALE } from "../content/clientLocale";
+import { buildCardNames, buildCardTexts, DEFAULT_LOCALE } from "../content/clientLocale";
 import type { PublicMatchView, PrivatePlayerView } from "@dev-camcard/protocol";
 import { buildBoardViewModel } from "../viewmodel/BoardViewModel";
 
@@ -98,5 +98,48 @@ describe("ViewModel 消费真实内容层名字", () => {
     const cardNames = buildCardNames("zh-CN");
     const vm = buildBoardViewModel(pub, priv, cardNames);
     expect(vm.getCardName("no_such_card")).toBe("no_such_card");
+  });
+});
+
+// ── 5. buildCardTexts 提供完整文案，供商店预览消费 ────────────────────────────
+
+describe("buildCardTexts — 商店预览数据源", () => {
+  const texts = buildCardTexts("zh-CN");
+
+  it("返回 Map 类型", () => {
+    expect(texts).toBeInstanceOf(Map);
+  });
+
+  it("starter_allowance.body 命中规则文案", () => {
+    const entry = texts.get("starter_allowance");
+    expect(entry).toBeTruthy();
+    expect(entry!.body.length).toBeGreaterThan(0);
+  });
+
+  it("status_pressure.reminder 透传", () => {
+    const entry = texts.get("status_pressure");
+    expect(entry?.reminder).toBeTruthy();
+  });
+
+  it("ViewModel.getCardText 命中时返回完整文案，未命中时降级 null", () => {
+    const pub: PublicMatchView = {
+      roomId: "r", turnNumber: 1, activePlayer: 0,
+      players: [
+        { side: 0, name: "p1", hp: 30, block: 0, deckSize: 10, handSize: 5,
+          discardSize: 0, resourcePool: 0, attackPool: 0, venues: [],
+          scheduleSlots: [null, null], reservedCard: null,
+          hasReservedThisTurn: false, pendingDiscardCount: 0 },
+        { side: 1, name: "p2", hp: 30, block: 0, deckSize: 10, handSize: 5,
+          discardSize: 0, resourcePool: 0, attackPool: 0, venues: [],
+          scheduleSlots: [null, null], reservedCard: null,
+          hasReservedThisTurn: false, pendingDiscardCount: 0 },
+      ],
+      market: [], fixedSupplies: [],
+      started: true, ended: false, winner: null, pendingChoiceSide: null,
+    };
+    const priv: PrivatePlayerView = { side: 0, hand: [], discard: [], pendingChoice: null };
+    const vm = buildBoardViewModel(pub, priv, undefined, texts);
+    expect(vm.getCardText("starter_allowance")?.name).toBe("零花钱");
+    expect(vm.getCardText("no_such_card")).toBeNull();
   });
 });

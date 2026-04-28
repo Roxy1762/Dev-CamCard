@@ -28,6 +28,7 @@ import type {
   PendingChoiceView,
   PublicPlayerSummary,
 } from "@dev-camcard/protocol";
+import type { CardTextEntry } from "../content/clientLocale";
 
 // ── 子视图类型 ─────────────────────────────────────────────────────────────────
 
@@ -88,6 +89,12 @@ export interface BoardViewModel {
    */
   getCardName(cardId: string): string;
 
+  /**
+   * 获取卡牌完整文案（name / body / reminder）。
+   * 若 cardTexts 未注入或缺少该 cardId，返回 null —— 调用方据此降级。
+   */
+  getCardText(cardId: string): CardTextEntry | null;
+
   // ── 卡牌可操作性查询 ────────────────────────────────────────────
   /**
    * 该 cardId 是否为状态/压力等不可主动打出的牌。
@@ -131,11 +138,14 @@ function buildPlayerViewModel(
  * @param pub        来自 server 的公开视图（双方均可见）
  * @param priv       来自 server 的私有视图（仅己方可见）
  * @param cardNames  可选：cardId → 本地化名称 的映射（来自 content-loader）
+ * @param cardTexts  可选：cardId → 完整文案（name/body/reminder）的映射，
+ *                   用于商店预览 / 手牌悬浮等需要规则文本的渲染场景。
  */
 export function buildBoardViewModel(
   pub: PublicMatchView,
   priv: PrivatePlayerView,
-  cardNames?: ReadonlyMap<string, string>
+  cardNames?: ReadonlyMap<string, string>,
+  cardTexts?: ReadonlyMap<string, CardTextEntry>
 ): BoardViewModel {
   const mySide = priv.side as 0 | 1;
   const oppSide = (mySide === 0 ? 1 : 0) as 0 | 1;
@@ -165,6 +175,7 @@ export function buildBoardViewModel(
     fixedSupplies: pub.fixedSupplies,
 
     getCardName: (cardId: string) => cardNames?.get(cardId) ?? cardId,
+    getCardText: (cardId: string) => cardTexts?.get(cardId) ?? null,
     isStatusCard,
     isPressureCard,
   };

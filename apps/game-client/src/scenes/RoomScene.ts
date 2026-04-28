@@ -3,6 +3,13 @@ import type { PublicMatchView, PrivatePlayerView, PublicCardRef, PendingChoiceVi
 import { CMD } from "@dev-camcard/protocol";
 import type { RoomClient } from "../network/RoomClient";
 import { buildBoardViewModel, type BoardViewModel } from "../viewmodel/BoardViewModel";
+import type { CardTextEntry } from "../content/clientLocale";
+import {
+  getSettings,
+  subscribeSettings,
+  updateSettings,
+  type ClientSettings,
+} from "../settings/clientSettings";
 
 // ── 颜色/样式常量 ─────────────────────────────────────────────────────────────
 const FONT = "monospace";
@@ -66,6 +73,18 @@ export class RoomScene extends Phaser.Scene {
    */
   private cardNames?: ReadonlyMap<string, string>;
 
+  /**
+   * 可选注入卡牌完整文案（含 body / reminder），用于商店预览渲染。
+   */
+  private cardTexts?: ReadonlyMap<string, CardTextEntry>;
+
+  /** 当前客户端设置快照；订阅 settings 模块在变更时自动重绘。 */
+  private settings: ClientSettings = getSettings();
+  private unsubscribeSettings: (() => void) | null = null;
+
+  /** 设备像素比，缓存一次避免每个 text 都查询 window —— 文字烘焙的清晰度关键。 */
+  private dpr: number = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+
   /** 最小事件日志（最近 N 条，用于底部摘要显示） */
   private recentEvents: MatchEvent[] = [];
 
@@ -80,11 +99,12 @@ export class RoomScene extends Phaser.Scene {
     super({ key: "RoomScene" });
   }
 
-  init(data: { view: PublicMatchView; privateView: PrivatePlayerView; roomClient: RoomClient; cardNames?: ReadonlyMap<string, string> }): void {
+  init(data: { view: PublicMatchView; privateView: PrivatePlayerView; roomClient: RoomClient; cardNames?: ReadonlyMap<string, string>; cardTexts?: ReadonlyMap<string, CardTextEntry> }): void {
     this.view = data.view;
     this.privateView = data.privateView;
     this.roomClient = data.roomClient;
     this.cardNames = data.cardNames;
+    this.cardTexts = data.cardTexts;
   }
 
   create(): void {
@@ -107,6 +127,17 @@ export class RoomScene extends Phaser.Scene {
       this.showError(message);
     };
 
+    // 订阅设置变化（例如商店预览开关），变更时自动重绘 UI。
+    this.settings = getSettings();
+    this.unsubscribeSettings = subscribeSettings((s) => {
+      this.settings = s;
+      this.rebuildUI();
+    });
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.unsubscribeSettings?.();
+      this.unsubscribeSettings = null;
+    });
+
     this.rebuildUI();
   }
 
@@ -118,7 +149,7 @@ export class RoomScene extends Phaser.Scene {
     this.schedulePendingCard = null;
 
     // 构建 ViewModel —— 所有 draw 方法从此消费，不再直接访问 this.view / this.privateView
-    const vm = buildBoardViewModel(this.view, this.privateView, this.cardNames);
+    const vm = buildBoardViewModel(this.view, this.privateView, this.cardNames, this.cardTexts);
 
     if (!vm.pendingChoice) {
       this.choiceSelected.clear();
@@ -128,6 +159,7 @@ export class RoomScene extends Phaser.Scene {
       this.drawTopBar(vm);
       this.drawErrorBanner();
       this.drawChoicePanel(vm, vm.pendingChoice);
+      this.drawSettingsMenu();
       return;
     }
 
@@ -139,6 +171,7 @@ export class RoomScene extends Phaser.Scene {
     this.drawHandArea(vm);
     this.drawActionButtons(vm);
     this.drawEventLogStrip();
+    this.drawSettingsMenu();
   }
 
   // ── 顶栏 ─────────────────────────────────────────────────────────────────────
@@ -154,7 +187,110 @@ export class RoomScene extends Phaser.Scene {
 
     this.txt(10, 6, `房间: ${vm.roomId}`, 11, C_LABEL);
     this.txt(W / 2, 6, status, 13, vm.isMyTurn ? "#88ff88" : C_LABEL, true);
+
+    // 右上角设置入口（齿轮 + 商店预览开关状态指示）
+    const gearLabel = this.settings.showShopPreview ? "⚙ 设置 · 预览开" : "⚙ 设置 · 预览关";
+    this.btn(
+      W - 130,
+      4,
+      120,
+      20,
+      gearLabel,
+      9,
+      this.settings.showShopPreview ? "#22334a" : "#332233",
+      "#cccccc",
+      () => this.openSettingsMenu()
+    );
+
     this.hr(0, 26, W);
+  }
+
+  /**
+   * 设置弹层 —— 当前只有"商店牌预览"一个开关，未来可扩展为更多项。
+   * 直接复用 rebuildUI() 流程，把弹层作为最上层 UI 层叠出来。
+   */
+  private settingsMenuOpen = false;
+
+  private openSettingsMenu(): void {
+    this.settingsMenuOpen = !this.settingsMenuOpen;
+    this.rebuildUI();
+  }
+
+  private drawSettingsMenu(): void {
+    if (!this.settingsMenuOpen) return;
+    const W = this.cameras.main.width;
+
+    const panelW = 280;
+    const panelH = 130;
+    const panelX = W - panelW - 10;
+    const panelY = 28;
+
+    const mask = this.add.graphics();
+    mask.fillStyle(0x000000, 0.55);
+    mask.fillRect(0, 0, this.cameras.main.width, this.cameras.main.height);
+    this.uiObjects.push(mask);
+
+    // 点击空白处关闭
+    const dismissZone = this.add.zone(0, 0, this.cameras.main.width, this.cameras.main.height)
+      .setOrigin(0, 0)
+      .setInteractive();
+    dismissZone.on("pointerdown", () => {
+      this.settingsMenuOpen = false;
+      this.rebuildUI();
+    });
+    this.uiObjects.push(dismissZone);
+
+    // 设置面板背景（拦截点击避免穿透到 dismissZone）
+    const bg = this.add.graphics();
+    bg.fillStyle(0x14142a, 1);
+    bg.fillRect(panelX, panelY, panelW, panelH);
+    bg.lineStyle(1, 0x4a4a7a, 1);
+    bg.strokeRect(panelX, panelY, panelW, panelH);
+    this.uiObjects.push(bg);
+    const blockZone = this.add.zone(panelX, panelY, panelW, panelH).setOrigin(0, 0).setInteractive();
+    blockZone.on("pointerdown", () => {
+      /* 吞掉点击 —— 防止落到 dismissZone */
+    });
+    this.uiObjects.push(blockZone);
+
+    this.txt(panelX + 10, panelY + 8, "⚙ 设置", 13, "#ffd86b");
+
+    this.txt(panelX + 10, panelY + 32, "商店牌预览", 11, "#cccccc");
+    this.txt(
+      panelX + 10,
+      panelY + 48,
+      "悬停或常驻显示卡牌效果，便于决策。",
+      9,
+      "#888899"
+    );
+
+    const previewOn = this.settings.showShopPreview;
+    this.btn(
+      panelX + 10,
+      panelY + 70,
+      120,
+      26,
+      previewOn ? "✓ 已开启" : "已关闭",
+      11,
+      previewOn ? "#1f3a26" : "#3a1f26",
+      previewOn ? "#aaffcc" : "#ffaacc",
+      () => updateSettings({ showShopPreview: !previewOn })
+    );
+
+    this.btn(
+      panelX + panelW - 70,
+      panelY + 70,
+      60,
+      26,
+      "关闭",
+      11,
+      "#222244",
+      "#cccccc",
+      () => {
+        this.settingsMenuOpen = false;
+        this.rebuildUI();
+      }
+    );
   }
 
   private drawErrorBanner(): void {
@@ -260,46 +396,100 @@ export class RoomScene extends Phaser.Scene {
 
     const canReserve = vm.isMyTurn && !vm.me.hasReservedThisTurn && vm.me.reservedCard === null;
     const laneW = Math.floor((W - shopX - 8) / 3);
+    const previewOn = this.settings.showShopPreview;
+    // 预览模式下整张卡变高（显示规则文案）；关闭时维持紧凑布局。
+    const slotH = previewOn ? 78 : 46;
+    const cardBtnH = previewOn ? 20 : 22;
+    const reserveBtnH = previewOn ? 16 : 18;
+
     for (let i = 0; i < vm.market.length; i++) {
       const lane = vm.market[i];
       const lx = shopX + 4 + i * laneW;
       this.txt(lx, y, lane.lane.toUpperCase(), 11, C_LANE);
       for (let si = 0; si < lane.slots.length; si++) {
         const card = lane.slots[si];
-        const by = y + 14 + si * 46;
+        const by = y + 14 + si * slotH;
         if (card) {
+          // 预览正文：仅在开启时绘制，作为底层信息块。
+          if (previewOn) {
+            const previewText = this.composeCardPreviewText(vm, card.id);
+            const previewH = slotH - cardBtnH - (canReserve ? reserveBtnH + 2 : 0) - 2;
+            if (previewH >= 14) {
+              this.txtBox(
+                lx,
+                by + cardBtnH + (canReserve ? reserveBtnH + 2 : 0) + 1,
+                laneW - 4,
+                previewH,
+                previewText,
+                8,
+                "#11142a",
+                "#9aaecc"
+              );
+            }
+          }
+
           if (vm.isMyTurn) {
-            this.btn(lx, by, laneW - 4, 22, `${vm.getCardName(card.id)}(买)`, 9, C_BTN_MY, C_BTN_TXT, () => {
+            this.btn(lx, by, laneW - 4, cardBtnH, `${vm.getCardName(card.id)}(买)`, 9, C_BTN_MY, C_BTN_TXT, () => {
               this.roomClient.send({ type: CMD.BUY_MARKET_CARD, instanceId: card.instanceId });
             });
             if (canReserve) {
-              this.btn(lx, by + 24, laneW - 4, 18, `预约(1资源)`, 9, C_BTN_RSV, "#aaffcc", () => {
+              this.btn(lx, by + cardBtnH + 2, laneW - 4, reserveBtnH, `预约(1资源)`, 9, C_BTN_RSV, "#aaffcc", () => {
                 this.roomClient.send({ type: CMD.RESERVE_MARKET_CARD, instanceId: card.instanceId });
               });
             }
           } else {
-            this.txtBox(lx, by, laneW - 4, 42, vm.getCardName(card.id), 9, C_BTN, C_LABEL);
+            this.txtBox(lx, by, laneW - 4, cardBtnH, vm.getCardName(card.id), 9, C_BTN, C_LABEL);
           }
         } else {
-          this.txtBox(lx, by, laneW - 4, 42, "（空）", 9, C_BTN, "#555555");
+          this.txtBox(lx, by, laneW - 4, slotH - 4, "（空）", 9, C_BTN, "#555555");
         }
       }
     }
 
-    y += 14 + 2 * 46 + 4;
+    y += 14 + 2 * slotH + 4;
 
     this.txt(shopX + 4, y, "固定补给:", 11, C_LABEL);
     y += 14;
+    const fixedH = previewOn ? 36 : 22;
     for (const cardId of vm.fixedSupplies) {
-      if (vm.isMyTurn) {
-        this.btn(shopX + 4, y, W - shopX - 12, 22, `${vm.getCardName(cardId)}（无限，点击买）`, 10, C_BTN_MY, C_BTN_TXT, () => {
-          this.roomClient.send({ type: CMD.BUY_FIXED_SUPPLY, cardId });
-        });
+      const label = `${vm.getCardName(cardId)}（无限，点击买）`;
+      if (previewOn) {
+        const text = this.composeCardPreviewText(vm, cardId);
+        // 把按钮 + 预览文案做成上下两层。
+        if (vm.isMyTurn) {
+          this.btn(shopX + 4, y, W - shopX - 12, 18, label, 10, C_BTN_MY, C_BTN_TXT, () => {
+            this.roomClient.send({ type: CMD.BUY_FIXED_SUPPLY, cardId });
+          });
+        } else {
+          this.txtBox(shopX + 4, y, W - shopX - 12, 18, vm.getCardName(cardId), 10, C_BTN, C_LABEL);
+        }
+        this.txtBox(shopX + 4, y + 18, W - shopX - 12, fixedH - 18, text, 8, "#11142a", "#9aaecc");
+        y += fixedH + 4;
       } else {
-        this.txtBox(shopX + 4, y, W - shopX - 12, 22, vm.getCardName(cardId), 10, C_BTN, C_LABEL);
+        if (vm.isMyTurn) {
+          this.btn(shopX + 4, y, W - shopX - 12, 22, label, 10, C_BTN_MY, C_BTN_TXT, () => {
+            this.roomClient.send({ type: CMD.BUY_FIXED_SUPPLY, cardId });
+          });
+        } else {
+          this.txtBox(shopX + 4, y, W - shopX - 12, 22, vm.getCardName(cardId), 10, C_BTN, C_LABEL);
+        }
+        y += 26;
       }
-      y += 26;
     }
+  }
+
+  /**
+   * 组合一张卡的预览文案（body + reminder）。文案缺失时回退到 cardId 提示，
+   * 让玩家至少能看到这是什么 cardId（便于反馈缺资源问题）。
+   */
+  private composeCardPreviewText(vm: BoardViewModel, cardId: string): string {
+    const text = vm.getCardText(cardId);
+    if (!text) return `（暂无文案）${cardId}`;
+    let combined = text.body || "";
+    if (text.reminder) {
+      combined = combined ? `${combined}\n${text.reminder}` : text.reminder;
+    }
+    return combined || `（暂无文案）${cardId}`;
   }
 
   // ── 己方信息区 ────────────────────────────────────────────────────────────────
@@ -718,7 +908,8 @@ export class RoomScene extends Phaser.Scene {
     color: string, centered = false
   ): Phaser.GameObjects.Text {
     const t = this.add.text(x, y, text, { fontSize: `${size}px`, color, fontFamily: FONT })
-      .setOrigin(centered ? 0.5 : 0, 0);
+      .setOrigin(centered ? 0.5 : 0, 0)
+      .setResolution(this.dpr);
     this.uiObjects.push(t);
     return t;
   }
@@ -740,7 +931,7 @@ export class RoomScene extends Phaser.Scene {
     const t = this.add.text(4, Math.floor(h / 2), text, {
       fontSize: `${size}px`, color: textColor, fontFamily: FONT,
       wordWrap: { width: w - 8 },
-    }).setOrigin(0, 0.5);
+    }).setOrigin(0, 0.5).setResolution(this.dpr);
     const container = this.add.container(x, y, [g, t]);
     this.uiObjects.push(container);
     return container;
@@ -761,7 +952,7 @@ export class RoomScene extends Phaser.Scene {
     const t = this.add.text(Math.floor(w / 2), Math.floor(h / 2), text, {
       fontSize: `${size}px`, color: textColor, fontFamily: FONT,
       wordWrap: { width: w - 6 }, align: "center",
-    }).setOrigin(0.5, 0.5);
+    }).setOrigin(0.5, 0.5).setResolution(this.dpr);
 
     const zone = this.add.zone(0, 0, w, h).setOrigin(0, 0).setInteractive({ useHandCursor: true });
     zone.on("pointerdown", onClick);
