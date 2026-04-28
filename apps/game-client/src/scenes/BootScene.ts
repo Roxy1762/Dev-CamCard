@@ -2,7 +2,7 @@ import Phaser from "phaser";
 import { RoomClient } from "../network/RoomClient";
 import type { PublicMatchView, PrivatePlayerView } from "@dev-camcard/protocol";
 import { preloadRuntimePlaceholders } from "../assets/runtimeAssets";
-import { buildCardNames, DEFAULT_LOCALE } from "../content/clientLocale";
+import { buildCardNames, buildCardTexts, DEFAULT_LOCALE } from "../content/clientLocale";
 
 interface BootSceneData {
   /** 由 lobby 完成 ws 握手后传入；BootScene 不再自己发起连接。 */
@@ -32,6 +32,9 @@ export class BootScene extends Phaser.Scene {
   create(data: BootSceneData): void {
     const cx = this.cameras.main.centerX;
     const cy = this.cameras.main.centerY;
+    // 高 DPI 屏幕（iPad / Retina）字体清晰度提升 —— Phaser 默认按 1x 渲染文字纹理
+    // 再 CSS 缩放，会糊成马赛克。这里按设备像素比烘焙文字纹理。
+    const dpr = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
 
     this.add
       .text(cx, cy - 60, "Dev-CamCard · 课表风暴", {
@@ -39,7 +42,8 @@ export class BootScene extends Phaser.Scene {
         color: "#888888",
         fontFamily: "monospace",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setResolution(dpr);
 
     const roomLine = this.add
       .text(cx, cy - 20, "", {
@@ -48,7 +52,8 @@ export class BootScene extends Phaser.Scene {
         fontFamily: "monospace",
         align: "center",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setResolution(dpr);
 
     const initialMessage =
       data.mode === "create"
@@ -63,7 +68,8 @@ export class BootScene extends Phaser.Scene {
         color: "#aaaaaa",
         fontFamily: "monospace",
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setResolution(dpr);
 
     if (!data?.roomClient) {
       statusText.setText("RoomClient 未传入，请回到主页面重新进入。");
@@ -80,6 +86,8 @@ export class BootScene extends Phaser.Scene {
 
     // 构建 locale 文案 Map（早于网络请求，纯同步）
     const cardNames = buildCardNames(DEFAULT_LOCALE);
+    // 完整文案（含 body / reminder）用于商店预览 / 手牌悬浮
+    const cardTexts = buildCardTexts(DEFAULT_LOCALE);
 
     // 等待 state_update + private_update 均到达后再切换场景
     let firstView: PublicMatchView | null = null;
@@ -94,6 +102,7 @@ export class BootScene extends Phaser.Scene {
         privateView: firstPrivate,
         roomClient,
         cardNames,
+        cardTexts,
       });
     };
 

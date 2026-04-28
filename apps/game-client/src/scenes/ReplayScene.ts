@@ -180,10 +180,15 @@ export class ReplayScene extends Phaser.Scene {
 
   // ── 辅助工厂 ─────────────────────────────────────────────────────────────────
 
+  private get dpr(): number {
+    return typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  }
+
   private t(x: number, y: number, text: string, size: number, color: string, centered = false): void {
     const obj = this.add
       .text(x, y, text, { fontSize: `${size}px`, color, fontFamily: FONT })
-      .setOrigin(centered ? 0.5 : 0, 0);
+      .setOrigin(centered ? 0.5 : 0, 0)
+      .setResolution(this.dpr);
     this.uiObjects.push(obj);
   }
 
@@ -218,7 +223,8 @@ export class ReplayScene extends Phaser.Scene {
         color: fg,
         fontFamily: FONT,
       })
-      .setOrigin(0.5, 0.5);
+      .setOrigin(0.5, 0.5)
+      .setResolution(this.dpr);
 
     const zone = this.add.zone(0, 0, w, h).setOrigin(0, 0).setInteractive({ useHandCursor: true });
     zone.on("pointerdown", onClick);

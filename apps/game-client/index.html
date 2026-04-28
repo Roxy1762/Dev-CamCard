@@ -18,11 +18,21 @@
         font-family: "Helvetica Neue", "PingFang SC", "Microsoft YaHei", sans-serif;
         overflow: auto;
       }
+      /* Phaser Scale.FIT 把 canvas 缩放到容器内最大可放尺寸；
+         #game 占满视口让其能撑到屏幕极限，避免在大屏 iPad/桌面留白严重。*/
       #game {
         display: flex;
         justify-content: center;
         align-items: center;
+        width: 100vw;
+        height: 100vh;
         min-height: 100vh;
+        overflow: hidden;
+      }
+      #game canvas {
+        display: block;
+        max-width: 100%;
+        max-height: 100%;
       }
       #lobby {
         max-width: 720px;
@@ -139,6 +149,16 @@
         display: inline-block;
         user-select: all;
       }
+      button.copy-btn {
+        background: #2c2c4a;
+        color: #ffd86b;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+      button.copy-btn.copied {
+        background: #224433;
+        color: #aaffcc;
+      }
       .hidden {
         display: none !important;
       }
@@ -178,6 +198,7 @@
         <div class="panel-row">
           <button id="create-room" type="button">创建房间</button>
           <span id="created-room-id" class="room-id-display hidden"></span>
+          <button id="copy-room-id" type="button" class="copy-btn hidden">📋 复制房号</button>
         </div>
         <div class="panel-row">
           <input

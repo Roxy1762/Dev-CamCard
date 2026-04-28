@@ -30,6 +30,7 @@ interface LobbyDom {
   joinIdInput: HTMLInputElement;
   status: HTMLElement;
   createdRoomId: HTMLElement;
+  copyRoomIdBtn: HTMLButtonElement;
   adminLink: HTMLAnchorElement;
 }
 
@@ -64,8 +65,40 @@ function readDom(): LobbyDom {
     joinIdInput: $<HTMLInputElement>("join-room-id"),
     status: $<HTMLElement>("lobby-status"),
     createdRoomId: $<HTMLElement>("created-room-id"),
+    copyRoomIdBtn: $<HTMLButtonElement>("copy-room-id"),
     adminLink: $<HTMLAnchorElement>("admin-link"),
   };
+}
+
+/**
+ * 复制房号到剪贴板。优先使用 Clipboard API，
+ * 不可用时回退到 execCommand("copy") 选择文本节点。
+ * 返回 true 表示复制成功。
+ */
+async function copyRoomIdToClipboard(text: string): Promise<boolean> {
+  if (!text) return false;
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through to legacy path */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    document.body.appendChild(ta);
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 function inferAdminUrl(): string {
@@ -134,6 +167,9 @@ export function startLobby(opts: LobbyControllerOptions): void {
     setBusy(dom, true);
     setStatus(dom, "正在连接服务器...");
     dom.createdRoomId.classList.add("hidden");
+    dom.copyRoomIdBtn.classList.add("hidden");
+    dom.copyRoomIdBtn.classList.remove("copied");
+    dom.copyRoomIdBtn.textContent = "📋 复制房号";
 
     const name = playerName();
     if (name) saveName(name);
@@ -174,6 +210,26 @@ export function startLobby(opts: LobbyControllerOptions): void {
       if (id) {
         dom.createdRoomId.textContent = id;
         dom.createdRoomId.classList.remove("hidden");
+        dom.copyRoomIdBtn.classList.remove("hidden");
+        dom.copyRoomIdBtn.dataset.roomId = id;
+      }
+    });
+  });
+
+  dom.copyRoomIdBtn.addEventListener("click", () => {
+    const id =
+      dom.copyRoomIdBtn.dataset.roomId ?? dom.createdRoomId.textContent ?? "";
+    void copyRoomIdToClipboard(id).then((ok) => {
+      if (ok) {
+        dom.copyRoomIdBtn.textContent = "✓ 已复制";
+        dom.copyRoomIdBtn.classList.add("copied");
+        setStatus(dom, `已复制房号 ${id}，把它发给好友吧。`);
+        setTimeout(() => {
+          dom.copyRoomIdBtn.textContent = "📋 复制房号";
+          dom.copyRoomIdBtn.classList.remove("copied");
+        }, 1800);
+      } else {
+        setStatus(dom, "复制失败，请手动选中房号复制。", "error");
       }
     });
   });

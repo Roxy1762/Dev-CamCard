@@ -89,3 +89,39 @@ export function buildCardNames(
 
   return map;
 }
+
+/**
+ * 卡牌完整文案条目 — 用于商店预览 / 手牌悬浮提示等渲染场景。
+ * body 可能为多行规则文本；reminder 为辅助提示（非规则文本）。
+ */
+export interface CardTextEntry {
+  name: string;
+  body: string;
+  reminder?: string | null;
+}
+
+/**
+ * 构建 cardId → 完整文案 的 Map。
+ *
+ * 与 buildCardNames 相比，本函数额外包含 body / reminder，
+ * 供需要展示规则文案的 UI（商店预览、手牌悬浮等）消费。
+ */
+export function buildCardTexts(
+  locale: SupportedLocale = DEFAULT_LOCALE
+): Map<string, CardTextEntry> {
+  const map = new Map<string, CardTextEntry>();
+  const files = TEXT_FILES[locale] ?? TEXT_FILES[DEFAULT_LOCALE];
+
+  for (const file of files) {
+    for (const [cardId, entry] of Object.entries(file.cards)) {
+      if (!entry.name && !entry.body) continue;
+      map.set(cardId, {
+        name: entry.name,
+        body: entry.body,
+        reminder: entry.reminder ?? null,
+      });
+    }
+  }
+
+  return map;
+}
