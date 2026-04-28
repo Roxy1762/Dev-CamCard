@@ -28,7 +28,7 @@ scripts/deploy.sh             # build + up -d
 | 入口 | 地址 |
 | --- | --- |
 | 玩家主页面（lobby） | <http://${HOST}:3000> |
-| Colyseus 房间服务 | ws://${HOST}:3000/game_room *(经 nginx 同域反代)* |
+| Colyseus 房间服务 | ws://${HOST}:3000/matchmake/* + ws://${HOST}:3000/<processId>/<roomId> *(经 nginx 同域反代)* |
 | 只读对局 API      | <http://${HOST}:3000/api/matches> *(经 nginx 同域反代)* |
 | 只读卡牌 API      | <http://${HOST}:3000/api/cards> *(经 nginx 同域反代)* |
 | Server 健康检查   | <http://${HOST}:3000/health> *(经 nginx 同域反代)* |
@@ -46,7 +46,7 @@ scripts/deploy.sh             # build + up -d
 
 ### 为什么是 “同域”？
 
-游戏前端镜像内的 nginx 既托管 Phaser 静态产物，也把 `/matchmake/*`、`/game_room/*`、`/api/*`、`/admin/*` 全部反代到对应容器。客户端 `RoomClient` 在生产构建里默认用 `window.location.host` 推导 ws 地址，因此你访问哪个 host 就连哪个 host —— 不会再出现 “部署在 IP 上但客户端硬编码到 localhost:2567 → 网络不可达” 的问题。
+游戏前端镜像内的 nginx 既托管 Phaser 静态产物，也把 `/matchmake/*`（HTTP seat reservation）、`/<processId>/<roomId>`（Colyseus 实际 ws 握手路径）、`/api/*`、`/admin/*` 全部反代到对应容器。客户端 `RoomClient` 在生产构建里默认用 `window.location.host` 推导 ws 地址，因此你访问哪个 host 就连哪个 host —— 不会再出现 “部署在 IP 上但客户端硬编码到 localhost:2567 → 网络不可达” 的问题。
 
 如果确实需要前端连接到独立的 server 端点（例如多机部署），在 `.env` 里设置 `VITE_SERVER_URL=wss://your-server-host` 重新构建即可。
 
@@ -104,7 +104,7 @@ pnpm typecheck
 ```
 
 - `server` 直接以 `tsx` 运行 TS（workspace 包通过 `package.json -> main: src/index.ts` 指向源码）。
-- `game-client` 用 nginx 托管 Vite 构建产物，同时暴露 `/api`、`/matchmake`、`/game_room` 反代，便于同域部署。
+- `game-client` 用 nginx 托管 Vite 构建产物，同时暴露 `/api`、`/matchmake/*`、Colyseus ws 路径 `/<processId>/<roomId>` 反代，便于同域部署。
 - `admin` 通过 `NEXT_PUBLIC_API_BASE` 调用 server 的只读 API，显示最近对局 + 事件流。
 
 ## 环境变量
@@ -122,7 +122,7 @@ pnpm typecheck
 | `NEXT_BASE_PATH` | admin 的 Next.js basePath；同域反代默认 `/admin` | `/admin` |
 | `NEXT_PUBLIC_API_BASE` | 后台调用 server API 的地址 | *(空，走容器内部 server:2567)* |
 
-> 默认就是 “同域单端口” 部署：`VITE_SERVER_URL` 留空 → 客户端按 `window.location` 推导 → nginx 把 `/game_room` ws、`/matchmake`、`/api/*`、`/admin/*` 全部反代到对应容器。线上需要锁紧 CORS 时把 `CLIENT_ORIGIN` 换成具体域名列表即可。
+> 默认就是 “同域单端口” 部署：`VITE_SERVER_URL` 留空 → 客户端按 `window.location` 推导 → nginx 把 Colyseus ws 路径（`/matchmake/*` + `/<processId>/<roomId>`）、`/api/*`、`/admin/*` 全部反代到对应容器。线上需要锁紧 CORS 时把 `CLIENT_ORIGIN` 换成具体域名列表即可。
 >
 > 如果你不希望走同域反代（例如 admin 想用独立子域名），把 `NEXT_BASE_PATH` 与 `VITE_ADMIN_URL` 都置空，并在 `.env` 里把 `VITE_ADMIN_URL` 改成完整 URL（如 `https://admin.example.com`）即可。
 

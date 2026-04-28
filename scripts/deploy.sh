@@ -61,7 +61,7 @@ print_endpoints() {
   cat <<EOF
 [deploy] 服务已启动。
         玩家主页面    http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}
-        Colyseus     ws://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/game_room   (经 nginx 同域反代)
+        Colyseus     ws://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/matchmake/* + /<processId>/<roomId>   (经 nginx 同域反代)
         对局 API      http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/api/matches
         卡牌 API      http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/api/cards
         Server 健康   http://${PUBLIC_HOST}:${CLIENT_HOST_PORT:-3000}/health
