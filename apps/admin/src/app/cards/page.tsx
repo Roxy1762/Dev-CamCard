@@ -10,11 +10,11 @@ export default function CardsPage() {
   return (
     <main
       style={{
-        padding: "2rem",
+        padding: "clamp(1rem, 4vw, 2rem)",
         display: "flex",
         flexDirection: "column",
         gap: "1.5rem",
-        maxWidth: 1080,
+        maxWidth: 1280,
         margin: "0 auto",
       }}
     >

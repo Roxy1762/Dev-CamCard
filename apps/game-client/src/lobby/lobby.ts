@@ -15,6 +15,7 @@
 
 import { RoomClient } from "../network/RoomClient";
 import { connectWithFallback, describeConnectError, type JoinAction } from "../network/connectFlow";
+import { copyTextToClipboard } from "./roomBadge";
 
 export type LobbyMode = "quick" | "create" | "join";
 
@@ -68,37 +69,6 @@ function readDom(): LobbyDom {
     copyRoomIdBtn: $<HTMLButtonElement>("copy-room-id"),
     adminLink: $<HTMLAnchorElement>("admin-link"),
   };
-}
-
-/**
- * 复制房号到剪贴板。优先使用 Clipboard API，
- * 不可用时回退到 execCommand("copy") 选择文本节点。
- * 返回 true 表示复制成功。
- */
-async function copyRoomIdToClipboard(text: string): Promise<boolean> {
-  if (!text) return false;
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    }
-  } catch {
-    /* fall through to legacy path */
-  }
-  try {
-    const ta = document.createElement("textarea");
-    ta.value = text;
-    ta.setAttribute("readonly", "");
-    ta.style.position = "fixed";
-    ta.style.opacity = "0";
-    document.body.appendChild(ta);
-    ta.select();
-    const ok = document.execCommand("copy");
-    document.body.removeChild(ta);
-    return ok;
-  } catch {
-    return false;
-  }
 }
 
 function inferAdminUrl(): string {
@@ -219,7 +189,7 @@ export function startLobby(opts: LobbyControllerOptions): void {
   dom.copyRoomIdBtn.addEventListener("click", () => {
     const id =
       dom.copyRoomIdBtn.dataset.roomId ?? dom.createdRoomId.textContent ?? "";
-    void copyRoomIdToClipboard(id).then((ok) => {
+    void copyTextToClipboard(id).then((ok) => {
       if (ok) {
         dom.copyRoomIdBtn.textContent = "✓ 已复制";
         dom.copyRoomIdBtn.classList.add("copied");
