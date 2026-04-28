@@ -10,9 +10,15 @@ import {
   updateSettings,
   type ClientSettings,
 } from "../settings/clientSettings";
+import {
+  copyTextToClipboard,
+  mountRoomBadge,
+  unmountRoomBadge,
+} from "../lobby/roomBadge";
+import { createUI, type UIKit } from "./uiKit";
+import { BASE_WIDTH, BASE_HEIGHT } from "../main";
 
 // ── 颜色/样式常量 ─────────────────────────────────────────────────────────────
-const FONT = "monospace";
 const C_TITLE   = "#ffffff";
 const C_LABEL   = "#aaaaaa";
 const C_VALUE   = "#66ccff";
@@ -82,8 +88,11 @@ export class RoomScene extends Phaser.Scene {
   private settings: ClientSettings = getSettings();
   private unsubscribeSettings: (() => void) | null = null;
 
-  /** 设备像素比，缓存一次避免每个 text 都查询 window —— 文字烘焙的清晰度关键。 */
-  private dpr: number = typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
+  /** 设备像素比；由 main.ts 在 init 时注入，用于 camera zoom + UI kit 内部判断。 */
+  private dpr = 1;
+
+  /** 统一文字 / 按钮工厂；rebuildUI 时 push 到 uiObjects 自动清理。 */
+  private ui!: UIKit;
 
   /** 最小事件日志（最近 N 条，用于底部摘要显示） */
   private recentEvents: MatchEvent[] = [];
@@ -99,16 +108,34 @@ export class RoomScene extends Phaser.Scene {
     super({ key: "RoomScene" });
   }
 
-  init(data: { view: PublicMatchView; privateView: PrivatePlayerView; roomClient: RoomClient; cardNames?: ReadonlyMap<string, string>; cardTexts?: ReadonlyMap<string, CardTextEntry> }): void {
+  init(data: { view: PublicMatchView; privateView: PrivatePlayerView; roomClient: RoomClient; cardNames?: ReadonlyMap<string, string>; cardTexts?: ReadonlyMap<string, CardTextEntry>; dpr?: number }): void {
     this.view = data.view;
     this.privateView = data.privateView;
     this.roomClient = data.roomClient;
     this.cardNames = data.cardNames;
     this.cardTexts = data.cardTexts;
+    this.dpr = data.dpr ?? (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor("#0f0f1e");
+    // origin=0 + zoom=dpr：世界坐标 [0, BASE_WIDTH/HEIGHT] → 画布像素 [0, BASE×dpr]。
+    // 这是文字清晰度的真正修复点：canvas backing buffer 与最终物理像素 1:1，无插值。
+    this.cameras.main.setOrigin(0, 0);
+    if (this.dpr !== 1) this.cameras.main.setZoom(this.dpr);
+    this.ui = createUI(this, this.uiObjects);
+
+    // RoomScene 期间持续显示房号 + 复制按钮（独立 HTML 浮层，不被 canvas 抢焦）。
+    if (this.view.roomId) {
+      mountRoomBadge({
+        roomId: this.view.roomId,
+        prominent: false,
+        onCopy: () => copyTextToClipboard(this.view.roomId),
+      });
+    }
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      unmountRoomBadge();
+    });
 
     this.roomClient.onStateUpdate = (v: PublicMatchView) => {
       this.view = v;
@@ -177,7 +204,7 @@ export class RoomScene extends Phaser.Scene {
   // ── 顶栏 ─────────────────────────────────────────────────────────────────────
 
   private drawTopBar(vm: BoardViewModel): void {
-    const W = this.cameras.main.width;
+    const W = BASE_WIDTH;
     const active = vm.isMyTurn ? "● 我的回合" : "○ 等待对方";
     const status = vm.ended
       ? `对局结束 · 胜者: 玩家${(vm.winner ?? 0) + 1}`
@@ -218,7 +245,7 @@ export class RoomScene extends Phaser.Scene {
 
   private drawSettingsMenu(): void {
     if (!this.settingsMenuOpen) return;
-    const W = this.cameras.main.width;
+    const W = BASE_WIDTH;
 
     const panelW = 280;
     const panelH = 130;
@@ -227,11 +254,11 @@ export class RoomScene extends Phaser.Scene {
 
     const mask = this.add.graphics();
     mask.fillStyle(0x000000, 0.55);
-    mask.fillRect(0, 0, this.cameras.main.width, this.cameras.main.height);
+    mask.fillRect(0, 0, BASE_WIDTH, BASE_HEIGHT);
     this.uiObjects.push(mask);
 
     // 点击空白处关闭
-    const dismissZone = this.add.zone(0, 0, this.cameras.main.width, this.cameras.main.height)
+    const dismissZone = this.add.zone(0, 0, BASE_WIDTH, BASE_HEIGHT)
       .setOrigin(0, 0)
       .setInteractive();
     dismissZone.on("pointerdown", () => {
@@ -295,7 +322,7 @@ export class RoomScene extends Phaser.Scene {
 
   private drawErrorBanner(): void {
     if (!this.errorText) return;
-    this.txtBox(10, 30, this.cameras.main.width - 20, 18, this.errorText, 10, "#441111", "#ffaaaa");
+    this.txtBox(10, 30, BASE_WIDTH - 20, 18, this.errorText, 10, "#441111", "#ffaaaa");
   }
 
   private showError(message: string): void {
@@ -381,13 +408,13 @@ export class RoomScene extends Phaser.Scene {
     this.txt(10, y, oppReserveLabel, 11, opp.reservedCard ? "#aaffaa" : "#555555");
     y += 14;
 
-    this.hr(0, y, this.cameras.main.width / 2);
+    this.hr(0, y, BASE_WIDTH / 2);
   }
 
   // ── 商店区（三栏 + 固定补给）────────────────────────────────────────────────
 
   private drawShopArea(vm: BoardViewModel): void {
-    const W = this.cameras.main.width;
+    const W = BASE_WIDTH;
     const shopX = Math.floor(W / 2);
 
     let y = this.errorText ? 54 : 32;
@@ -548,7 +575,7 @@ export class RoomScene extends Phaser.Scene {
   // ── 手牌区 ────────────────────────────────────────────────────────────────────
 
   private drawHandArea(vm: BoardViewModel): void {
-    const W = this.cameras.main.width;
+    const W = BASE_WIDTH;
     const hand = vm.hand;
 
     const CARD_W = 120;
@@ -598,7 +625,7 @@ export class RoomScene extends Phaser.Scene {
   // ── 操作按钮区 ────────────────────────────────────────────────────────────────
 
   private drawActionButtons(vm: BoardViewModel): void {
-    const W = this.cameras.main.width;
+    const W = BASE_WIDTH;
     const BTN_Y = 500;
     const BTN_H = 40;
 
@@ -645,7 +672,7 @@ export class RoomScene extends Phaser.Scene {
 
     this.txt(
       W / 2,
-      this.cameras.main.height - 16,
+      BASE_HEIGHT - 16,
       vm.isMyTurn ? "你的回合 — 点击手牌打出，点击商店购买，点击场馆启动" : "等待对方操作...",
       10,
       "#444466",
@@ -656,8 +683,8 @@ export class RoomScene extends Phaser.Scene {
   // ── 待处理选择面板 ────────────────────────────────────────────────────────────
 
   private drawChoicePanel(vm: BoardViewModel, choice: PendingChoiceView): void {
-    const W = this.cameras.main.width;
-    const H = this.cameras.main.height;
+    const W = BASE_WIDTH;
+    const H = BASE_HEIGHT;
 
     const mask = this.add.graphics();
     mask.fillStyle(0x000000, 0.75);
@@ -846,8 +873,8 @@ export class RoomScene extends Phaser.Scene {
   // ── 事件日志条（底部最近摘要）────────────────────────────────────────────────
 
   private drawEventLogStrip(): void {
-    const W = this.cameras.main.width;
-    const H = this.cameras.main.height;
+    const W = BASE_WIDTH;
+    const H = BASE_HEIGHT;
     const STRIP_Y = H - 58;
 
     if (this.recentEvents.length === 0) return;
@@ -901,40 +928,45 @@ export class RoomScene extends Phaser.Scene {
     }
   }
 
-  // ── UI 辅助工厂 ───────────────────────────────────────────────────────────────
+  // ── UI 辅助工厂（薄包装：统一走 uiKit） ─────────────────────────────────────
+  //
+  // 这些方法保留是为了兼容大量已有 callsite 的签名（size 仍按数字传入）；
+  // 内部完全委派给 createUI 工厂，确保字体栈 / 分辨率 / padding 一处修改全局生效。
+  // 同时统一把 size 抬一档：原始 8/9/10 像素的字号在高 DPI 屏依然偏细，
+  // 抬到 minSize=10 后既保持布局，又让小字也清晰。
+
+  private adjustSize(size: number): number {
+    // 8 → 10，9 → 11，10 → 11；中等及以上字号保持原值。
+    if (size <= 8) return 10;
+    if (size === 9) return 11;
+    if (size === 10) return 11;
+    return size;
+  }
 
   private txt(
     x: number, y: number, text: string, size: number,
     color: string, centered = false
   ): Phaser.GameObjects.Text {
-    const t = this.add.text(x, y, text, { fontSize: `${size}px`, color, fontFamily: FONT })
-      .setOrigin(centered ? 0.5 : 0, 0)
-      .setResolution(this.dpr);
-    this.uiObjects.push(t);
-    return t;
+    return this.ui.text(x, y, text, {
+      size: this.adjustSize(size),
+      color,
+      centered,
+    });
   }
 
   private hr(x: number, y: number, w: number): void {
-    const g = this.add.graphics();
-    g.lineStyle(1, 0x333355, 1);
-    g.strokeLineShape(new Phaser.Geom.Line(x, y, x + w, y));
-    this.uiObjects.push(g);
+    this.ui.hr(x, y, w);
   }
 
   private txtBox(
     x: number, y: number, w: number, h: number,
     text: string, size: number, bgColor: string, textColor: string
   ): Phaser.GameObjects.Container {
-    const g = this.add.graphics();
-    g.fillStyle(Phaser.Display.Color.HexStringToColor(bgColor).color, 1);
-    g.fillRect(0, 0, w, h);
-    const t = this.add.text(4, Math.floor(h / 2), text, {
-      fontSize: `${size}px`, color: textColor, fontFamily: FONT,
-      wordWrap: { width: w - 8 },
-    }).setOrigin(0, 0.5).setResolution(this.dpr);
-    const container = this.add.container(x, y, [g, t]);
-    this.uiObjects.push(container);
-    return container;
+    return this.ui.textBox(x, y, w, h, text, {
+      size: this.adjustSize(size),
+      bgColor,
+      textColor,
+    });
   }
 
   private btn(
@@ -942,37 +974,10 @@ export class RoomScene extends Phaser.Scene {
     text: string, size: number, bgColor: string, textColor: string,
     onClick: () => void
   ): Phaser.GameObjects.Container {
-    const g = this.add.graphics();
-    const colorObj = Phaser.Display.Color.HexStringToColor(bgColor);
-    g.fillStyle(colorObj.color, 1);
-    g.fillRect(0, 0, w, h);
-    g.lineStyle(1, 0x8888cc, 0.6);
-    g.strokeRect(0, 0, w, h);
-
-    const t = this.add.text(Math.floor(w / 2), Math.floor(h / 2), text, {
-      fontSize: `${size}px`, color: textColor, fontFamily: FONT,
-      wordWrap: { width: w - 6 }, align: "center",
-    }).setOrigin(0.5, 0.5).setResolution(this.dpr);
-
-    const zone = this.add.zone(0, 0, w, h).setOrigin(0, 0).setInteractive({ useHandCursor: true });
-    zone.on("pointerdown", onClick);
-    zone.on("pointerover", () => {
-      g.clear();
-      g.fillStyle(colorObj.color, 1);
-      g.fillRect(0, 0, w, h);
-      g.lineStyle(2, 0xaaaaff, 1);
-      g.strokeRect(0, 0, w, h);
-    });
-    zone.on("pointerout", () => {
-      g.clear();
-      g.fillStyle(colorObj.color, 1);
-      g.fillRect(0, 0, w, h);
-      g.lineStyle(1, 0x8888cc, 0.6);
-      g.strokeRect(0, 0, w, h);
-    });
-
-    const container = this.add.container(x, y, [g, t, zone]);
-    this.uiObjects.push(container);
-    return container;
+    return this.ui.button(
+      x, y, w, h, text,
+      { size: this.adjustSize(size), bgColor, textColor },
+      onClick
+    );
   }
 }

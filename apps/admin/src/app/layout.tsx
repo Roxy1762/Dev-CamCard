@@ -12,7 +12,20 @@ export default function RootLayout({
 }) {
   return (
     <html lang="zh-CN">
-      <body style={{ margin: 0, fontFamily: "monospace" }}>{children}</body>
+      <body
+        style={{
+          margin: 0,
+          fontFamily:
+            '"PingFang SC","Microsoft YaHei","Hiragino Sans GB","Source Han Sans SC","Noto Sans CJK SC",system-ui,-apple-system,"Segoe UI",sans-serif',
+          color: "#222",
+          background: "#fafbfc",
+          minHeight: "100vh",
+          WebkitFontSmoothing: "antialiased",
+          MozOsxFontSmoothing: "grayscale",
+        }}
+      >
+        {children}
+      </body>
     </html>
   );
 }

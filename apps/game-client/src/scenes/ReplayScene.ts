@@ -1,8 +1,8 @@
 import Phaser from "phaser";
 import type { MatchEvent } from "@dev-camcard/protocol";
 import type { RoomClient } from "../network/RoomClient";
-
-const FONT = "monospace";
+import { createUI, type UIKit } from "./uiKit";
+import { BASE_WIDTH, BASE_HEIGHT } from "../main";
 
 /**
  * ReplayScene — 最小事件日志回放骨架。
@@ -26,6 +26,8 @@ export class ReplayScene extends Phaser.Scene {
 
   /** UI 对象列表（rerender 时销毁） */
   private uiObjects: Phaser.GameObjects.GameObject[] = [];
+  private ui!: UIKit;
+  private dpr = 1;
 
   constructor() {
     super({ key: "ReplayScene" });
@@ -36,6 +38,7 @@ export class ReplayScene extends Phaser.Scene {
     cardNames?: ReadonlyMap<string, string>;
     matchLog?: MatchEvent[];
     parentSceneKey?: string;
+    dpr?: number;
   }): void {
     this.roomClient = data.roomClient;
     this.matchLog = data.matchLog ?? [];
@@ -43,10 +46,14 @@ export class ReplayScene extends Phaser.Scene {
     this.scrollOffset = 0;
     this.loading = false;
     this.errorMessage = null;
+    this.dpr = data.dpr ?? (typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1);
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor("#080818");
+    this.cameras.main.setOrigin(0, 0);
+    if (this.dpr !== 1) this.cameras.main.setZoom(this.dpr);
+    this.ui = createUI(this, this.uiObjects);
 
     // 若外部未提前注入完整日志，则按需拉取一次。
     if (this.matchLog.length === 0 && this.roomClient) {
@@ -84,14 +91,14 @@ export class ReplayScene extends Phaser.Scene {
     for (const obj of this.uiObjects) obj.destroy();
     this.uiObjects = [];
 
-    const W = this.cameras.main.width;
+    const W = BASE_WIDTH;
 
     // 标题栏
-    this.t(W / 2, 12, "事件日志 / 回放骨架", 14, "#aaaaff", true);
-    this.hr(0, 28, W);
+    this.ui.text(W / 2, 12, "事件日志 / 回放骨架", { size: 16, color: "#aaaaff", centered: true, weight: "bold" });
+    this.ui.hr(0, 32, W, 0x222244);
 
     // 返回按钮
-    this.btn(W - 90, 6, 80, 22, "← 返回", 10, "#222244", "#8888cc", () => {
+    this.ui.button(W - 90, 6, 80, 24, "← 返回", { size: 11, bgColor: "#222244", textColor: "#8888cc" }, () => {
       if (this.parentSceneKey) {
         this.scene.stop("ReplayScene");
         this.scene.resume(this.parentSceneKey);
@@ -101,31 +108,31 @@ export class ReplayScene extends Phaser.Scene {
     });
 
     if (this.loading) {
-      this.t(W / 2, 200, "正在加载完整事件日志…", 13, "#7777aa", true);
+      this.ui.text(W / 2, BASE_HEIGHT / 2, "正在加载完整事件日志…", { size: 14, color: "#7777aa", centered: true });
       return;
     }
 
     if (this.errorMessage) {
-      this.t(W / 2, 200, this.errorMessage, 13, "#ff8888", true);
+      this.ui.text(W / 2, BASE_HEIGHT / 2, this.errorMessage, { size: 14, color: "#ff8888", centered: true });
       return;
     }
 
     if (this.matchLog.length === 0) {
-      this.t(W / 2, 200, "（暂无事件记录）", 13, "#555566", true);
+      this.ui.text(W / 2, BASE_HEIGHT / 2, "（暂无事件记录）", { size: 14, color: "#666677", centered: true });
       return;
     }
 
     // 表头
-    let y = 36;
-    this.t(10, y, "seq", 9, "#555577");
-    this.t(50, y, "时间(ms)", 9, "#555577");
-    this.t(130, y, "类型", 9, "#555577");
-    this.t(360, y, "操作方", 9, "#555577");
-    this.t(420, y, "数据摘要", 9, "#555577");
-    this.hr(0, y + 12, W);
-    y += 16;
+    let y = 40;
+    this.ui.text(10, y, "seq", { size: 11, color: "#8888aa" });
+    this.ui.text(50, y, "时间(ms)", { size: 11, color: "#8888aa" });
+    this.ui.text(130, y, "类型", { size: 11, color: "#8888aa" });
+    this.ui.text(360, y, "操作方", { size: 11, color: "#8888aa" });
+    this.ui.text(420, y, "数据摘要", { size: 11, color: "#8888aa" });
+    this.ui.hr(0, y + 14, W, 0x222244);
+    y += 18;
 
-    const ROW_H = 14;
+    const ROW_H = 16;
     const visible = this.matchLog.slice(this.scrollOffset, this.scrollOffset + 30);
 
     for (const evt of visible) {
@@ -134,35 +141,32 @@ export class ReplayScene extends Phaser.Scene {
       const dataStr = evt.data ? JSON.stringify(evt.data).slice(0, 60) : "";
       const tsStr = String(evt.ts).slice(-6); // 最后6位 ms，足够区分
 
-      this.t(10, y, String(evt.seq), 8, "#444466");
-      this.t(50, y, tsStr, 8, "#444466");
-      this.t(130, y, evt.type, 9, color);
-      this.t(360, y, sideLabel, 9, "#6688aa");
-      this.t(420, y, dataStr, 8, "#445566");
+      this.ui.text(10, y, String(evt.seq), { size: 10, color: "#666688" });
+      this.ui.text(50, y, tsStr, { size: 10, color: "#666688" });
+      this.ui.text(130, y, evt.type, { size: 11, color });
+      this.ui.text(360, y, sideLabel, { size: 11, color: "#6688aa" });
+      this.ui.text(420, y, dataStr, { size: 10, color: "#667788" });
       y += ROW_H;
     }
 
     // 分页提示
     const total = this.matchLog.length;
     const end = Math.min(this.scrollOffset + 30, total);
-    this.t(
-      W / 2,
-      y + 4,
+    this.ui.text(
+      W / 2, y + 4,
       `显示 ${this.scrollOffset + 1}–${end} / 共 ${total} 条  (↑↓ 键滚动)`,
-      9,
-      "#444466",
-      true
+      { size: 11, color: "#666688", centered: true }
     );
 
     // 滚动按钮
     if (this.scrollOffset > 0) {
-      this.btn(10, y, 60, 18, "↑ 上", 9, "#222233", "#8888cc", () => {
+      this.ui.button(10, y, 60, 20, "↑ 上", { size: 11, bgColor: "#222233", textColor: "#8888cc" }, () => {
         this.scrollOffset = Math.max(0, this.scrollOffset - 10);
         this.rerender();
       });
     }
     if (end < total) {
-      this.btn(80, y, 60, 18, "↓ 下", 9, "#222233", "#8888cc", () => {
+      this.ui.button(80, y, 60, 20, "↓ 下", { size: 11, bgColor: "#222233", textColor: "#8888cc" }, () => {
         this.scrollOffset = Math.min(total - 15, this.scrollOffset + 10);
         this.rerender();
       });
@@ -176,60 +180,5 @@ export class ReplayScene extends Phaser.Scene {
     if (type === "BUY_MARKET_CARD" || type === "BUY_FIXED_SUPPLY") return "#88ffcc";
     if (type === "CONCEDE") return "#ff4444";
     return "#8888aa";
-  }
-
-  // ── 辅助工厂 ─────────────────────────────────────────────────────────────────
-
-  private get dpr(): number {
-    return typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-  }
-
-  private t(x: number, y: number, text: string, size: number, color: string, centered = false): void {
-    const obj = this.add
-      .text(x, y, text, { fontSize: `${size}px`, color, fontFamily: FONT })
-      .setOrigin(centered ? 0.5 : 0, 0)
-      .setResolution(this.dpr);
-    this.uiObjects.push(obj);
-  }
-
-  private hr(x: number, y: number, w: number): void {
-    const g = this.add.graphics();
-    g.lineStyle(1, 0x222244, 1);
-    g.strokeLineShape(new Phaser.Geom.Line(x, y, x + w, y));
-    this.uiObjects.push(g);
-  }
-
-  private btn(
-    x: number,
-    y: number,
-    w: number,
-    h: number,
-    text: string,
-    size: number,
-    bg: string,
-    fg: string,
-    onClick: () => void
-  ): void {
-    const g = this.add.graphics();
-    const c = Phaser.Display.Color.HexStringToColor(bg);
-    g.fillStyle(c.color, 1);
-    g.fillRect(0, 0, w, h);
-    g.lineStyle(1, 0x8888cc, 0.5);
-    g.strokeRect(0, 0, w, h);
-
-    const t = this.add
-      .text(Math.floor(w / 2), Math.floor(h / 2), text, {
-        fontSize: `${size}px`,
-        color: fg,
-        fontFamily: FONT,
-      })
-      .setOrigin(0.5, 0.5)
-      .setResolution(this.dpr);
-
-    const zone = this.add.zone(0, 0, w, h).setOrigin(0, 0).setInteractive({ useHandCursor: true });
-    zone.on("pointerdown", onClick);
-
-    const container = this.add.container(x, y, [g, t, zone]);
-    this.uiObjects.push(container);
   }
 }

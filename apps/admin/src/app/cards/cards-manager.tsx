@@ -72,6 +72,15 @@ const tagStyle: React.CSSProperties = {
   fontSize: "0.75rem",
 };
 
+const breakdownPill: React.CSSProperties = {
+  padding: "2px 10px",
+  background: "#f0f4ff",
+  border: "1px solid #d0d8ee",
+  borderRadius: 999,
+  fontSize: "0.8rem",
+  color: "#334",
+};
+
 /**
  * 卡牌管理面板。
  *
@@ -127,6 +136,35 @@ export default function CardsManager() {
     });
   }, [data, keyword, setFilter, laneFilter, rarityFilter]);
 
+  // 当前筛选下按 lane / rarity 的张数分布，便于运营在调整供给前先看大盘。
+  const breakdown = useMemo(() => {
+    const byLane: Record<string, number> = { course: 0, activity: 0, daily: 0 };
+    const byRarity: Record<string, number> = {
+      common: 0,
+      uncommon: 0,
+      rare: 0,
+      signature: 0,
+    };
+    for (const c of filtered) {
+      byLane[c.lane] = (byLane[c.lane] ?? 0) + 1;
+      byRarity[c.rarity] = (byRarity[c.rarity] ?? 0) + 1;
+    }
+    return { byLane, byRarity };
+  }, [filtered]);
+
+  const exportJson = useCallback(() => {
+    if (filtered.length === 0) return;
+    const blob = new Blob([JSON.stringify(filtered, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `cards-export-${new Date().toISOString().slice(0, 10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [filtered]);
+
   const ruleSets = data?.ruleSets ?? [];
 
   return (
@@ -142,9 +180,25 @@ export default function CardsManager() {
             color: "#eee",
             border: "1px solid #444",
             cursor: "pointer",
+            borderRadius: 4,
           }}
         >
           刷新
+        </button>
+        <button
+          type="button"
+          onClick={exportJson}
+          disabled={filtered.length === 0}
+          style={{
+            padding: "0.25rem 0.75rem",
+            background: filtered.length === 0 ? "#bbb" : "#1e88e5",
+            color: "#fff",
+            border: "1px solid transparent",
+            cursor: filtered.length === 0 ? "not-allowed" : "pointer",
+            borderRadius: 4,
+          }}
+        >
+          导出当前筛选 JSON
         </button>
         {status === "loading" && <span style={{ color: "#888" }}>加载中...</span>}
         {status === "ok" && data && (
@@ -158,6 +212,40 @@ export default function CardsManager() {
           </span>
         )}
       </header>
+
+      {status === "ok" && filtered.length > 0 && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            gap: "0.5rem",
+            color: "#555",
+            fontSize: "0.85rem",
+          }}
+        >
+          <span style={breakdownPill}>
+            课程 {breakdown.byLane.course}
+          </span>
+          <span style={breakdownPill}>
+            活动 {breakdown.byLane.activity}
+          </span>
+          <span style={breakdownPill}>
+            日常 {breakdown.byLane.daily}
+          </span>
+          <span style={{ ...breakdownPill, background: "#fff" }}>
+            普通 {breakdown.byRarity.common}
+          </span>
+          <span style={{ ...breakdownPill, background: "#fff" }}>
+            进阶 {breakdown.byRarity.uncommon}
+          </span>
+          <span style={{ ...breakdownPill, background: "#fff" }}>
+            稀有 {breakdown.byRarity.rare}
+          </span>
+          <span style={{ ...breakdownPill, background: "#fff" }}>
+            标志 {breakdown.byRarity.signature}
+          </span>
+        </div>
+      )}
 
       <div
         style={{
@@ -208,7 +296,7 @@ export default function CardsManager() {
 
       {filtered.length > 0 && (
         <div style={{ maxHeight: 600, overflow: "auto", border: "1px solid #eee" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.9rem", minWidth: 720 }}>
             <thead>
               <tr>
                 <th style={cellHead}>ID / 名称</th>
