@@ -10,11 +10,6 @@ import {
   updateSettings,
   type ClientSettings,
 } from "../settings/clientSettings";
-import {
-  copyTextToClipboard,
-  mountRoomBadge,
-  unmountRoomBadge,
-} from "../lobby/roomBadge";
 import { createUI, type UIKit } from "./uiKit";
 import { BASE_WIDTH, BASE_HEIGHT } from "../main";
 
@@ -125,18 +120,6 @@ export class RoomScene extends Phaser.Scene {
     if (this.dpr !== 1) this.cameras.main.setZoom(this.dpr);
     this.ui = createUI(this, this.uiObjects);
 
-    // RoomScene 期间持续显示房号 + 复制按钮（独立 HTML 浮层，不被 canvas 抢焦）。
-    if (this.view.roomId) {
-      mountRoomBadge({
-        roomId: this.view.roomId,
-        prominent: false,
-        onCopy: () => copyTextToClipboard(this.view.roomId),
-      });
-    }
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
-      unmountRoomBadge();
-    });
-
     this.roomClient.onStateUpdate = (v: PublicMatchView) => {
       this.view = v;
       this.rebuildUI();
@@ -172,7 +155,10 @@ export class RoomScene extends Phaser.Scene {
 
   private rebuildUI(): void {
     for (const obj of this.uiObjects) obj.destroy();
-    this.uiObjects = [];
+    // Must clear in-place — this.ui's track() closure captures the original array reference.
+    // Reassigning this.uiObjects = [] would leave the UIKit pushing into a stale array,
+    // causing accumulated (non-destroyed) objects on every rebuildUI call.
+    this.uiObjects.length = 0;
     this.schedulePendingCard = null;
 
     // 构建 ViewModel —— 所有 draw 方法从此消费，不再直接访问 this.view / this.privateView
