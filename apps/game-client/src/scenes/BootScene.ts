@@ -99,7 +99,7 @@ export class BootScene extends Phaser.Scene {
       });
     }
 
-    // 进 RoomScene 时清掉房号气泡（RoomScene 顶栏会重新挂出一个紧凑版）。
+    // 进 RoomScene 前清掉房号气泡；游戏进行中不再展示该浮层。
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       unmountRoomBadge();
     });
