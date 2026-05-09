@@ -7,14 +7,14 @@
  *  - 将 PublicMatchView + PrivatePlayerView 合并为渲染层所需的统一视图结构
  *  - 在此处集中推导衍生状态（isMyTurn / mySide / oppSide 等）
  *  - 支持本地化卡牌名称注入（cardNames）
- *  - RoomScene 消费 BoardViewModel，而非直接散乱读取原始视图
+ *  - 渲染层（HtmlGameView）消费 BoardViewModel，而非直接散乱读取原始视图
  *
  * 设计原则：
  *  - 纯函数：buildBoardViewModel 无副作用，可单独测试
- *  - 不依赖 Phaser，可在 Node.js / Vitest 环境中运行
+ *  - 不依赖任何渲染框架（Phaser / DOM），可在 Node.js / Vitest 环境运行
  *  - 本地化名称通过 Map<cardId, localizedName> 注入，缺失时降级为 cardId
  *
- * 使用方式（RoomScene）：
+ * 使用方式：
  *   const vm = buildBoardViewModel(this.view, this.privateView, this.cardNames);
  *   // 用 vm.isMyTurn / vm.me.hp / vm.hand 等替代直接读取 view.*
  */
