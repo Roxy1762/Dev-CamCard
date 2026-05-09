@@ -51,6 +51,8 @@ roadmap 上接下来的客户端工作（回放播放器、机制提示、可视
 HTML 仍负责 UI 文字 / 表格 / 按钮 —— 双方各取所长，而不是回到"用 canvas
 渲染所有文字"的旧路。
 
+具体方案与验收清单见 [`docs/future-effects-layer.md`](./future-effects-layer.md)。
+
 ### 已删除的旧实现
 
 - `apps/game-client/src/scenes/{BootScene,RoomScene,ReplayScene,uiKit}.ts`
