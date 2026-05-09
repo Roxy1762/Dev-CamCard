@@ -12,8 +12,7 @@
   },
   "dependencies": {
     "@dev-camcard/protocol": "workspace:*",
-    "colyseus.js": "^0.15.17",
-    "phaser": "^3.80.0"
+    "colyseus.js": "^0.15.17"
   },
   "devDependencies": {
     "@types/node": "^20.12.0",

@@ -1,97 +1,43 @@
-import Phaser from "phaser";
-import { BootScene } from "./scenes/BootScene";
-import { RoomScene } from "./scenes/RoomScene";
-import { ReplayScene } from "./scenes/ReplayScene";
-import { startLobby, showGameView, type LobbyConnection } from "./lobby/lobby";
-
 /**
+ * main.ts — 游戏前端入口。
+ *
  * 启动顺序：
- *  1) 渲染 HTML lobby（index.html 已经布好结构），让玩家选模式
- *  2) lobby 完成 ws 握手后调用 onConnected，把已连接的 RoomClient 交给 Phaser
- *  3) Phaser 在 #game 容器里启动，BootScene 直接拿现成的 RoomClient 等待首帧
+ *  1) Lobby（HTML）让玩家选模式（快速匹配 / 创建房间 / 加入房号）
+ *  2) RoomClient 完成 ws 握手后，把已连接的 client 传到 HtmlGameView
+ *  3) HtmlGameView 显示 #game-view，订阅 RoomClient 推送，按状态更新 DOM
+ *
+ * 历史背景：
+ *  - 早期版本游戏区跑在 Phaser canvas 上，存在文字渲染糊化、布局重叠、多次
+ *    rebuildUI 累计未销毁对象等系列 bug。已切换到 HTML/CSS 渲染：
+ *    浏览器原生字体永远清晰、CSS Grid 自动避免坐标重叠、点击事件天然可靠。
+ *  - 旧的 Phaser scenes（BootScene / RoomScene / ReplayScene）已删除，
+ *    回放也改为 HTML 模态弹层。
  */
 
-let phaserGame: Phaser.Game | null = null;
+import { startLobby, type LobbyConnection } from "./lobby/lobby";
+import { HtmlGameView } from "./game/htmlGameView";
+import { buildCardNames, buildCardTexts, DEFAULT_LOCALE } from "./content/clientLocale";
 
-/** 牌桌基础逻辑分辨率 — 所有场景内部坐标按此尺寸编排。 */
-export const BASE_WIDTH = 900;
-export const BASE_HEIGHT = 640;
+let activeView: HtmlGameView | null = null;
 
-/** 当前设备像素比；高 DPI（Retina / iPad / 4K）下 > 1，普通桌面 = 1。 */
-function getDpr(): number {
-  return typeof window !== "undefined" ? window.devicePixelRatio || 1 : 1;
-}
-
-function bootPhaser(conn: LobbyConnection): void {
-  showGameView();
-
-  if (phaserGame) {
-    // 防止 hot-reload 重复启动（只在开发环境会触发）
-    phaserGame.destroy(true);
-    phaserGame = null;
+function bootGame(conn: LobbyConnection): void {
+  // 切换到游戏视图前，先销毁上一个（如有，hot-reload 场景）
+  if (activeView) {
+    activeView.destroy();
+    activeView = null;
   }
 
-  const dpr = getDpr();
-  // 关键：把"逻辑分辨率"乘以 DPR，作为 Phaser 真实画布尺寸；再用 camera.zoom = dpr
-  // 让所有场景代码继续按 BASE_WIDTH × BASE_HEIGHT 写坐标。这样画布像素与屏幕硬件
-  // 像素 1:1，文字 / 边框不再被 CSS 拉伸糊掉 —— 这是上一版"setResolution 还是糊"
-  // 的真正根因（canvas 自身 backing buffer 仍是 900×640，浏览器只能插值）。
-  const canvasW = Math.round(BASE_WIDTH * dpr);
-  const canvasH = Math.round(BASE_HEIGHT * dpr);
+  // 文案 Map 在前端构建期就准备好（Vite 把 JSON 静态打包），无需异步等待。
+  const cardNames = buildCardNames(DEFAULT_LOCALE);
+  const cardTexts = buildCardTexts(DEFAULT_LOCALE);
 
-  const config: Phaser.Types.Core.GameConfig = {
-    type: Phaser.AUTO,
-    backgroundColor: "#0f0f1e",
-    scene: [BootScene, RoomScene, ReplayScene],
-    parent: "game",
-    // FIT 模式：保留逻辑尺寸（坐标稳定），按比例缩放至容器；CENTER_BOTH 居中。
-    // 适配手机 / iPad / 桌面浏览器多种屏幕。canvas 真实像素 = BASE × dpr，
-    // 通过 camera.zoom = dpr 把 BASE 坐标映射到全画面。
-    scale: {
-      mode: Phaser.Scale.FIT,
-      autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: canvasW,
-      height: canvasH,
-      parent: "game",
-    },
-    // 反走样 + 不强制四舍五入像素 → 字体在高 DPI 屏（iPad / Retina）下不再糊。
-    render: {
-      antialias: true,
-      antialiasGL: true,
-      roundPixels: false,
-      pixelArt: false,
-    },
-  };
-
-  phaserGame = new Phaser.Game(config);
-  phaserGame.scene.start("BootScene", {
+  activeView = new HtmlGameView({
     roomClient: conn.client,
+    cardNames,
+    cardTexts,
     mode: conn.mode,
-    playerName: conn.playerName,
-    dpr,
   });
-
-  // DPR 变化（用户跨屏拖窗 / 系统级缩放调整）时，重启游戏以让画布按新像素比重建。
-  // 不监听 resize（Scale.FIT 已经处理布局缩放）；仅监听 DPR。
-  if (typeof window !== "undefined" && window.matchMedia) {
-    const mq = window.matchMedia(`(resolution: ${dpr}dppx)`);
-    const handler = () => {
-      if (window.devicePixelRatio !== dpr) {
-        // 重新引导：销毁后重新启动会拿到新 dpr。
-        if (phaserGame) {
-          phaserGame.destroy(true);
-          phaserGame = null;
-        }
-        bootPhaser(conn);
-      }
-    };
-    // 注意：mq 是一次性匹配；用 onchange 兼容老 Safari。
-    if (typeof mq.addEventListener === "function") {
-      mq.addEventListener("change", handler, { once: true });
-    } else if (typeof mq.addListener === "function") {
-      mq.addListener(handler);
-    }
-  }
+  activeView.start();
 }
 
-startLobby({ onConnected: bootPhaser });
+startLobby({ onConnected: bootGame });

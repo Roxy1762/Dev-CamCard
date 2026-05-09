@@ -23,7 +23,6 @@ const PLAYER_NAME_KEY = "devCamCard_playerName";
 
 interface LobbyDom {
   lobby: HTMLElement;
-  game: HTMLElement;
   playerName: HTMLInputElement;
   quickBtn: HTMLButtonElement;
   createBtn: HTMLButtonElement;
@@ -58,7 +57,6 @@ function $<T extends HTMLElement>(id: string): T {
 function readDom(): LobbyDom {
   return {
     lobby: $<HTMLElement>("lobby"),
-    game: $<HTMLElement>("game"),
     playerName: $<HTMLInputElement>("player-name"),
     quickBtn: $<HTMLButtonElement>("quick-match"),
     createBtn: $<HTMLButtonElement>("create-room"),
@@ -222,11 +220,4 @@ export function startLobby(opts: LobbyControllerOptions): void {
       dom.joinBtn.click();
     }
   });
-}
-
-export function showGameView(): void {
-  const lobby = document.getElementById("lobby");
-  const game = document.getElementById("game");
-  if (lobby) lobby.classList.add("hidden");
-  if (game) game.classList.remove("hidden");
 }
