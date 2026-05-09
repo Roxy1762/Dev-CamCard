@@ -495,6 +495,35 @@
         font-size: 13px;
         color: #aaaaaa;
         margin-bottom: 6px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        flex-wrap: wrap;
+      }
+      .hand-area .hand-title .conditions {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .hand-area .hand-title .cond {
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        background: rgba(255, 255, 255, 0.05);
+        color: #555577;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        letter-spacing: 0.04em;
+      }
+      .hand-area .hand-title .cond.active {
+        background: #1f3a26;
+        color: #aaffcc;
+        border-color: rgba(170, 255, 204, 0.4);
+      }
+      .hand-area .hand-title .cond.active.guard {
+        background: #3a1f26;
+        color: #ffaacc;
+        border-color: rgba(255, 170, 204, 0.4);
       }
       .hand-cards {
         display: flex;
@@ -747,6 +776,46 @@
         color: #ff6666;
       }
 
+      /* ── 卡牌悬浮预览 tooltip ──────────────────────────────────── */
+      #g-card-tooltip {
+        position: fixed;
+        z-index: 80;
+        max-width: 300px;
+        padding: 10px 12px;
+        background: #14142a;
+        border: 1px solid rgba(255, 216, 107, 0.5);
+        border-radius: 8px;
+        box-shadow: 0 6px 20px rgba(0, 0, 0, 0.55);
+        font-size: 12px;
+        line-height: 1.45;
+        color: #e8e8f5;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.12s ease;
+      }
+      #g-card-tooltip.visible {
+        opacity: 1;
+      }
+      #g-card-tooltip .tip-title {
+        font-size: 13px;
+        font-weight: 600;
+        color: #ffd86b;
+        margin-bottom: 4px;
+      }
+      #g-card-tooltip .tip-body {
+        white-space: pre-wrap;
+        color: #c8c8e0;
+      }
+      #g-card-tooltip .tip-reminder {
+        margin-top: 4px;
+        font-style: italic;
+        color: #8aa0c8;
+      }
+      #g-card-tooltip .tip-empty {
+        color: #888888;
+        font-style: italic;
+      }
+
       /* ───────── 多屏适配 ───────── */
 
       @media (max-width: 540px) {
@@ -952,7 +1021,10 @@
       </main>
 
       <section class="hand-area">
-        <div class="hand-title">手牌（<span id="g-hand-count">0</span> 张）</div>
+        <div class="hand-title">
+          <span>手牌（<span id="g-hand-count">0</span> 张）</span>
+          <div id="g-conditions" class="conditions"></div>
+        </div>
         <div id="g-hand" class="hand-cards"></div>
       </section>
 
@@ -994,6 +1066,7 @@
       </div>
 
       <div id="g-end-banner" class="end-banner hidden"></div>
+      <div id="g-card-tooltip" role="tooltip" aria-hidden="true"></div>
     </div>
 
     <script type="module" src="/src/main.ts"></script>

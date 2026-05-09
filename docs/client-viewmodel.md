@@ -8,7 +8,8 @@
 
 ### 原型阶段的问题
 
-在最初的 `RoomScene.ts` 实现中，draw 方法直接散乱读取 `this.view`（PublicMatchView）和 `this.privateView`（PrivatePlayerView）：
+在最初的 Phaser `RoomScene.ts` 实现中（已删除，现由 `HtmlGameView` 替代），
+draw 方法直接散乱读取 `this.view`（PublicMatchView）和 `this.privateView`（PrivatePlayerView）：
 
 ```typescript
 // 旧写法：直接读原始视图，衍生状态散落各处
@@ -29,7 +30,7 @@ const me = this.view.players[mySide];
 引入 `BoardViewModel` 后：
 - **集中推导衍生状态**：`mySide / oppSide / isMyTurn` 只在一处计算
 - **统一 locale 注入**：`getCardName(cardId)` 自动处理本地化和降级
-- **可独立测试**：`buildBoardViewModel` 是纯函数，不依赖 Phaser
+- **可独立测试**：`buildBoardViewModel` 是纯函数，不依赖任何渲染框架
 - **单点扩展**：加新字段（如 artKey、tooltip）只改 ViewModel，渲染层无需感知
 
 ---
@@ -101,50 +102,52 @@ export function buildBoardViewModel(
 
 ---
 
-## 四、RoomScene 使用方式
+## 四、HtmlGameView 使用方式
 
 ```typescript
-// rebuildUI 调用时构建 vm，所有 draw 方法消费 vm
-private rebuildUI(): void {
-  const vm = buildBoardViewModel(this.view, this.privateView, this.cardNames);
-  
-  if (vm.pendingChoice) {
-    this.drawTopBar(vm);
-    this.drawChoicePanel(vm, vm.pendingChoice);
-    return;
-  }
-  this.drawTopBar(vm);
-  this.drawOpponentInfo(vm);
-  this.drawShopArea(vm);
-  this.drawMyInfo(vm);
-  this.drawHandArea(vm);
-  this.drawActionButtons(vm);
+// renderAll 调用时构建 vm，所有 render* 方法消费 vm
+private renderAll(): void {
+  if (!this.view || !this.privateView) return;
+  const vm = buildBoardViewModel(
+    this.view, this.privateView, this.cardNames, this.cardTexts
+  );
+  this.renderHeader(vm);
+  this.renderPlayer(this.dom.opp, vm.opp, vm, false);
+  this.renderPlayer(this.dom.me, vm.me, vm, true);
+  this.renderMarket(vm);
+  this.renderFixedSupplies(vm);
+  this.renderHand(vm);
+  this.renderActionBar(vm);
+  this.renderEvents();
+  this.renderEndBanner(vm);
+  this.renderChoice(vm);
 }
 ```
 
-draw 方法只接收 `vm`，不再直接访问 `this.view` 或 `this.privateView`。
+render 方法只接收 `vm`，不直接访问原始 `view` / `privateView`。
 
 ---
 
-## 五、注入本地化名称（未来扩展）
+## 五、本地化名称与文案注入（已实现）
 
-当 content-loader 集成到客户端后，可以在 `BootScene` 或 `RoomScene` 初始化时加载：
+`apps/game-client/src/main.ts` 在启动 `HtmlGameView` 前调用
+`buildCardNames()` / `buildCardTexts()`（见 `content/clientLocale.ts`，
+Vite 在构建期把 zh-CN / en-US JSON 静态打包），把两个 Map 注入到视图：
 
 ```typescript
-// 未来示例（暂未实现）
-import { loadMergedBatch } from "@dev-camcard/schemas";
+const cardNames = buildCardNames(DEFAULT_LOCALE);
+const cardTexts = buildCardTexts(DEFAULT_LOCALE);
 
-const cards = loadMergedBatch(DATA_ROOT, [
-  { rules: "data/cards/rules/market-core.json", text: "data/cards/text/zh-CN/market-core.json" },
-  // ...
-]);
-// 构建 cardId → name 映射
-this.cardNames = new Map(cards.map(c => [c.id, c.name]));
+activeView = new HtmlGameView({
+  roomClient: conn.client,
+  cardNames,
+  cardTexts,
+  mode: conn.mode,
+});
 ```
 
-然后将 `this.cardNames` 传给 `buildBoardViewModel`，`getCardName` 即自动返回本地化名称。
-
-**当前状态**：`cardNames` 未注入（undefined），`getCardName` 降级返回 `cardId`。
+`getCardName` 缺失映射时降级返回 `cardId`，永远不会抛错。
+`getCardText` 缺失时返回 null，渲染层据此显示 `（暂无文案）${cardId}`。
 
 ---
 
@@ -170,5 +173,5 @@ this.cardNames = new Map(cards.map(c => [c.id, c.name]));
 | 文件 | 说明 |
 |------|------|
 | `apps/game-client/src/viewmodel/BoardViewModel.ts` | ViewModel 类型 + 构建函数 |
-| `apps/game-client/src/scenes/RoomScene.ts` | 消费 ViewModel 的渲染层 |
+| `apps/game-client/src/game/htmlGameView.ts` | 消费 ViewModel 的 HTML 渲染层 |
 | `apps/game-client/src/__tests__/viewmodel.test.ts` | 单元测试 |
