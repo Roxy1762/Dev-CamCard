@@ -80,6 +80,7 @@ interface DomRefs {
   fixed: HTMLElement;
   handCount: HTMLElement;
   hand: HTMLElement;
+  conditions: HTMLElement;
   actionBar: HTMLElement;
   events: HTMLElement;
   replayBtn: HTMLButtonElement;
@@ -96,6 +97,7 @@ interface DomRefs {
   replayBody: HTMLElement;
   replayClose: HTMLButtonElement;
   endBanner: HTMLElement;
+  tooltip: HTMLElement;
 }
 
 function readDom(root: HTMLElement): DomRefs {
@@ -117,6 +119,7 @@ function readDom(root: HTMLElement): DomRefs {
     fixed: $("g-fixed-supplies"),
     handCount: $("g-hand-count"),
     hand: $("g-hand"),
+    conditions: $("g-conditions"),
     actionBar: $("g-action-bar"),
     events: $("g-events"),
     replayBtn: $<HTMLButtonElement>("g-replay-btn"),
@@ -133,6 +136,7 @@ function readDom(root: HTMLElement): DomRefs {
     replayBody: $("g-replay-body"),
     replayClose: $<HTMLButtonElement>("g-replay-close"),
     endBanner: $("g-end-banner"),
+    tooltip: $("g-card-tooltip"),
   };
 }
 
@@ -270,6 +274,97 @@ export class HtmlGameView {
         this.dom.replayModal.classList.add("hidden");
       }
     });
+
+    // 任何弹层 / 滚动 / 缩放变化都隐藏 tooltip，避免错位飘着。
+    window.addEventListener("scroll", () => this.hideTooltip(), { passive: true });
+    window.addEventListener("resize", () => this.hideTooltip());
+  }
+
+  // ── 卡牌悬浮预览 tooltip ────────────────────────────────────────────────────
+
+  /**
+   * 在元素上挂 tooltip 触发器：mouseenter/focus 时按 cardId 拉文案显示，
+   * mouseleave/blur 时隐藏。鼠标移动时跟随光标定位，避免被卡片遮挡。
+   */
+  private attachTooltip(el: HTMLElement, cardId: string): void {
+    const show = (e: MouseEvent | FocusEvent) => {
+      this.showTooltip(cardId, e);
+    };
+    const hide = () => this.hideTooltip();
+    el.addEventListener("mouseenter", show);
+    el.addEventListener("mouseleave", hide);
+    el.addEventListener("mousemove", (e) => this.positionTooltip(e));
+    el.addEventListener("focus", show);
+    el.addEventListener("blur", hide);
+  }
+
+  private showTooltip(cardId: string, e: MouseEvent | FocusEvent): void {
+    const name = this.cardNames?.get(cardId) ?? cardId;
+    const text = this.cardTexts?.get(cardId);
+    const tip = this.dom.tooltip;
+    tip.innerHTML = "";
+
+    const title = document.createElement("div");
+    title.className = "tip-title";
+    title.textContent = name;
+    tip.appendChild(title);
+
+    if (!text || (!text.body && !text.reminder)) {
+      const empty = document.createElement("div");
+      empty.className = "tip-empty";
+      empty.textContent = "（暂无规则文案）";
+      tip.appendChild(empty);
+    } else {
+      if (text.body) {
+        const body = document.createElement("div");
+        body.className = "tip-body";
+        body.textContent = text.body;
+        tip.appendChild(body);
+      }
+      if (text.reminder) {
+        const rem = document.createElement("div");
+        rem.className = "tip-reminder";
+        rem.textContent = text.reminder;
+        tip.appendChild(rem);
+      }
+    }
+
+    tip.classList.add("visible");
+    tip.setAttribute("aria-hidden", "false");
+    this.positionTooltip(e);
+  }
+
+  private hideTooltip(): void {
+    this.dom.tooltip.classList.remove("visible");
+    this.dom.tooltip.setAttribute("aria-hidden", "true");
+  }
+
+  /**
+   * 定位 tooltip：默认在光标右下角偏移 14px；接近右 / 下边界时翻到对侧，
+   * 保证不会跑出可视区。focus 事件无 clientX/Y，回退到元素 bounding rect。
+   */
+  private positionTooltip(e: MouseEvent | FocusEvent): void {
+    const tip = this.dom.tooltip;
+    const margin = 14;
+    let x: number;
+    let y: number;
+    if ("clientX" in e && typeof e.clientX === "number") {
+      x = e.clientX + margin;
+      y = e.clientY + margin;
+    } else if (e.currentTarget instanceof HTMLElement) {
+      const rect = e.currentTarget.getBoundingClientRect();
+      x = rect.right + margin;
+      y = rect.bottom + margin;
+    } else {
+      return;
+    }
+    const tipRect = tip.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    if (x + tipRect.width + margin > vw) x = Math.max(margin, vw - tipRect.width - margin);
+    if (y + tipRect.height + margin > vh) y = Math.max(margin, vh - tipRect.height - margin);
+    tip.style.left = `${x}px`;
+    tip.style.top = `${y}px`;
   }
 
   // ── 错误提示 ────────────────────────────────────────────────────────────────
@@ -298,16 +393,62 @@ export class HtmlGameView {
       this.choiceSelected.clear();
     }
 
+    // 任何重绘都先收掉 tooltip —— 旧的 DOM 节点要被移除，避免悬空指针错位。
+    this.hideTooltip();
+
     this.renderHeader(vm);
     this.renderPlayer(this.dom.opp, vm.opp, vm, false);
     this.renderPlayer(this.dom.me, vm.me, vm, true);
     this.renderMarket(vm);
     this.renderFixedSupplies(vm);
+    this.renderConditions(vm);
     this.renderHand(vm);
     this.renderActionBar(vm);
     this.renderEvents();
     this.renderEndBanner(vm);
     this.renderChoice(vm);
+  }
+
+  // ── 条件状态条（手牌区上方） ────────────────────────────────────────────
+  // 把引擎中的 hasScheduledCard / hasReservedCard / hasVenue 这三类条件
+  // 实时投影成视觉 chip：active = 已满足 / inactive = 未满足。
+  // 玩家不需要再去回想"我现在有没有场馆"才能判断带条件触发的牌能不能触发。
+
+  private renderConditions(vm: BoardViewModel): void {
+    const conds: Array<{ key: string; label: string; active: boolean; danger?: boolean }> = [
+      {
+        key: "scheduled",
+        label: "已安排",
+        active: vm.me.scheduleSlots.some((s) => s !== null),
+      },
+      {
+        key: "reserved",
+        label: "已预约",
+        active: vm.me.reservedCard !== null,
+      },
+      {
+        key: "venue",
+        label: "有场馆",
+        active: vm.me.venues.length > 0,
+      },
+      {
+        key: "guard",
+        label: "对方值守",
+        active: vm.opp.venues.some((v) => v.isGuard),
+        danger: true,
+      },
+    ];
+
+    this.dom.conditions.innerHTML = "";
+    for (const c of conds) {
+      const span = document.createElement("span");
+      span.className = "cond" + (c.active ? " active" : "") + (c.danger && c.active ? " guard" : "");
+      span.textContent = (c.active ? "✓ " : "○ ") + c.label;
+      span.title = c.active
+        ? `${c.label}：当前已满足`
+        : `${c.label}：当前未满足`;
+      this.dom.conditions.appendChild(span);
+    }
   }
 
   // ── 顶部信息栏 ────────────────────────────────────────────────────────────
@@ -510,6 +651,7 @@ export class HtmlGameView {
 
         const cardEl = document.createElement("div");
         cardEl.className = "market-card";
+        this.attachTooltip(cardEl, card.id);
 
         const name = document.createElement("div");
         name.className = "name";
@@ -571,6 +713,7 @@ export class HtmlGameView {
     for (const cardId of vm.fixedSupplies) {
       const card = document.createElement("div");
       card.className = "fixed-card";
+      this.attachTooltip(card, cardId);
 
       const name = document.createElement("div");
       name.className = "name";
@@ -621,6 +764,7 @@ export class HtmlGameView {
     for (const card of vm.hand) {
       const el = document.createElement("div");
       el.className = "hand-card";
+      this.attachTooltip(el, card.id);
 
       const name = document.createElement("div");
       name.className = "name";

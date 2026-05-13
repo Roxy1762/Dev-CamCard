@@ -7,7 +7,7 @@
 ### 1) 工程与架构
 - Monorepo（apps + packages）结构稳定。
 - 协议层（`packages/protocol`）、引擎层（`packages/engine`）、Schema 校验层（`packages/schemas`）已分层。
-- 服务端（Colyseus + Express）与客户端（Phaser + Vite）可联调运行。
+- 服务端（Colyseus + Express）与客户端（HTML/CSS + Vite）可联调运行。
 
 ### 2) 对局主流程
 - 1v1 对局主循环可完整执行：开局、轮转、结束判定。
@@ -28,7 +28,7 @@
 
 ### 5) 联机与持久化
 - 断线重连（60 秒）可用。
-- 事件日志可拉取，回放入口已接通（当前为日志视图），且回放界面返回链路已修复为覆盖层恢复 RoomScene。
+- 事件日志可拉取，回放入口已接通（当前为日志视图，HTML 模态弹层），且回放界面返回链路稳定。
 - Prisma + PostgreSQL 持久化可用，含 Match / MatchPlayer / MatchEvent；已补齐 Match 创建与玩家/事件写入之间的时序等待，避免极端竞争下丢记录。
 - 提供只读 API：`/api/matches`、`/api/matches/:id`、`/api/matches/:id/events`。
 
@@ -75,8 +75,14 @@
   - 效果链路：`setFlag / gainFaceUpCard / queueDelayedDiscard / createPressure` 均可在对局中触发并结算。
 
 ### 5) 工具与产品化
-- ReplayScene 仍是骨架（以事件列表为主），非完整复盘播放器。
+- 回放仍是骨架（以事件列表为主），非完整复盘播放器。下一步是"逐事件重建并渲染"。
 - admin 后台仍为壳，未形成实用运营视图。
+
+### 6) 客户端渲染层（HTML/CSS 重构）
+- 牌桌前端从 Phaser canvas 改为 HTML + CSS Grid（`htmlGameView.ts`）。
+- 文字清晰度、布局重叠、点击不可达、房号双显等系列 bug 一并消除。
+- bundle 从 ~1.3MB 降到 ~116KB（gzip 34KB）。
+- 详见 `docs/technical-decisions.md` "客户端渲染方案"决策记录。
 
 ## 已知风险 ⚠️
 
