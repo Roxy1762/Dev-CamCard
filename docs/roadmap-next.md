@@ -21,8 +21,14 @@
 ### P0-4 确定性 RNG / 可复现回放
 - ✅ 引擎随机入口已统一注入（包括抽牌、洗牌、效果随机分支）。
 - ✅ replay 所需初始 seed 与事件记录策略已有最小基础。
+- ✅ 引擎已落地回放重建原语（`packages/engine/src/replay.ts`）：
+  - `buildReplayInitialState` 与 `GameRoom.onCreate` 共用一条初始化路径，
+    保证 live 与回放从同一字节起点出发。
+  - `reconstructCommand` + `replayFromEvents` 能把 `MatchEvent` 流逐步推回
+    `InternalMatchState` 序列，单步出错不打断流程。
 - 下一步：把回放（HTML 模态弹层）从"事件列表查看器"升级为"逐事件重建播放器"
-  —— 显示每个事件后的牌桌快照，带步进 / 自动播放 / 跳转控件。
+  —— 用 `replayFromEvents` 输出的逐帧 state 投影成 PublicMatchView / 私有视图，
+  并加上步进 / 自动播放 / 跳转控件。
 
 ### P0-5 schema 收紧
 - 收敛 effect union 与 schema 的一一对应关系。

@@ -46,6 +46,25 @@
 - `GameRoom` 基于 `hashStringToSeed(roomId)` 初始化 seed，并把 `initialSeed` 写入 `MatchSnapshot`。
 - 引擎层已具备“同 seed + 同命令流 → 同关键结果”的最小验证（见 `determinism.test.ts`）。
 
+### 7.1) 回放重建原语（P0-4 基础设施）
+- 新增 `packages/engine/src/replay.ts`，把 P0-4 拆出可复用的最小核心：
+  - `buildReplayInitialState({ roomId, ruleset, playerNames, initialSeed, laneDefinitions })`
+    —— 与 `GameRoom.onCreate` 共用同一条 `createSeededMatchState` + `createMarketState`
+    初始化路径，确保 live 与回放重建逐字节一致。
+  - `reconstructCommand(event)` —— 把 `MatchEvent.data` 还原为可被 `reduce` 消费的
+    `ClientCommand`；系统事件（MATCH_START / MATCH_END）与未知 type 返回 null。
+  - `replayFromEvents(initialState, events, config)` —— 按事件流逐步推进，
+    返回每步 `ReplayStep`（含 state、event、可选 error）与 finalState、errors 清单。
+    单条事件出错不会中断流程：会回退到上一帧 state 并继续推进，便于定位首个偏差点。
+- `GameRoom` 已切换为调用 `buildReplayInitialState`，消灭"live 初始化"与"replay 初始化"
+  长期分叉的风险。
+- 新增聚焦测试 `packages/engine/src/__tests__/replay.test.ts`（16 条），覆盖：
+  - 同 setup 重复调用得到逐字节相同的初始状态。
+  - 不同 seed 产出不同的市场布局。
+  - 系统事件作为占位帧通过、命令事件还原、缺失字段安全降级、未知 type 返回 null。
+  - 空事件流、典型主链事件流（READY×2 + END_TURN×2）回放结果与直接 reduce 等价。
+  - 单步出错被记录到 errors 但流程继续。
+
 ### 8) effect schema 收紧
 - `card-rule.schema.json` 中的 Effect 按 op 分支改为 `oneOf`，每支 `additionalProperties: false`。
 - 统一 `drawThenDiscard` 字段为 `drawCount / discardCount`（engine 与 data 同步）。
@@ -59,8 +78,12 @@
 - 攻击分配 UI 仍偏 MVP：当前以“全力打脸 / 对单个场馆快捷攻击”两种快捷操作为主，尚未提供可视化多段拆分分配器。
 
 ### 2) 可复现性（部分完成）
-- 基础 seeded RNG 已落地；但完整回放（逐事件重建并渲染）尚未实现。
-- 当前已满足“同 seed + 同命令流 → 引擎关键结果一致”的最小条件；后续需要把命令流回放 + 视图重播串联。
+- 基础 seeded RNG 已落地；引擎侧已实现 `replayFromEvents` / `buildReplayInitialState`
+  作为"逐事件重建状态"的原语；尚未完成的是把 UI 渲染层接上来（步进 / 自动播放 /
+  跳转控件目前仍是事件列表视图）。
+- 当前已满足“同 seed + 同命令流 → 引擎关键结果一致”，并能在引擎层从 snapshot
+  + event log 重建出每一帧 `InternalMatchState`；接下来只剩把这些帧投影到
+  渲染层（HtmlGameView 或 server-side snapshot 接口）。
 
 ### 3) 规则与数据约束（效果 schema 已收紧）
 - effect schema 已从松散 `additionalProperties: true` 改为按 op 的 `oneOf`；data 与 engine 的 `drawThenDiscard` 字段已统一。

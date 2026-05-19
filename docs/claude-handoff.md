@@ -1,3 +1,40 @@
+# Claude 交接文档（2026-05-13 回放重建原语版）
+
+> 本轮把 P0-4（可复现回放）的引擎侧基础设施补齐：现在已经能从 snapshot + event log
+> 逐事件重建出 `InternalMatchState` 序列。剩下只是 UI 接线。
+
+## 本轮更新（回放重建原语）
+
+- 新增 `packages/engine/src/replay.ts`，导出三个核心原语：
+  - `buildReplayInitialState({ roomId, ruleset, playerNames, initialSeed, laneDefinitions })`
+    一步重建对局起点，路径与 `GameRoom.onCreate` 完全一致。
+  - `reconstructCommand(event)` 把 `MatchEvent.data` 还原为 `ClientCommand`；
+    系统事件（MATCH_START / MATCH_END）与未知 type 返回 null。
+  - `replayFromEvents(initialState, events, config)` 把事件流逐步推进，输出
+    每步 `ReplayStep`（含 state、event、可选 error）以及 finalState / errors。
+    单条事件出错不会中断回放，会回退到上一帧 state 并继续推进。
+- `apps/server/src/rooms/GameRoom.ts` 已切换到 `buildReplayInitialState`，
+  消除"live 初始化"与"replay 初始化"长期分叉的风险。
+- 新增 `packages/engine/src/__tests__/replay.test.ts`（16 条聚焦测试）。
+- 全量测试：269 engine + 89 schemas + 69 client = 343 passed，typecheck clean。
+
+## 建议下一步
+
+1. **接 UI**：在 `apps/game-client/src/game/htmlGameView.ts` 把 `renderReplay`
+   从"事件列表表格"升级为"步进 / 自动播放 / 跳转"型播放器。具体做法：
+   - 客户端拉到 `MatchEventLog` 后，调用 `buildReplayInitialState` + `replayFromEvents`
+     得到 `ReplayStep[]`，每步含 `InternalMatchState`。
+   - 用 `toPublicMatchView` + `toPrivatePlayerView` 把每步投影为现有 BoardViewModel
+     可消费的视图，复用 `htmlGameView` 渲染。
+   - UI 加 ▶ / ⏸ / ⏮ / ⏭ / 跳转滑块四件套即可。
+   - 需要客户端能加载 ruleset / cardDefs / laneDefinitions —— 当前 server-only；
+     最简单的做法是新增 `/api/matches/:id/replay-bootstrap` 接口，把这些以 JSON
+     发给客户端（或直接让 server 用 `replayFromEvents` 渲染并返回每步 PublicView）。
+2. **多段攻击分配器**：roadmap P0-3 的剩余体验项。
+3. **admin 端检索 / 标签**：P2-3 仍是壳。
+
+---
+
 # Claude 交接文档（2026-04-19 增量修复版）
 
 > 本轮已从“审查”进入“直接修主链 + 提升可部署性”的阶段。下面先给最新变更，再保留旧交接内容供上下文参考。

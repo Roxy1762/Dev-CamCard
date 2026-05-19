@@ -29,3 +29,4 @@ export * from "./effects";
 export * from "./projections";
 export * from "./init";
 export * from "./reduce";
+export * from "./replay";

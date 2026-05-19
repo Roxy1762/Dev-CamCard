@@ -10,8 +10,8 @@ import type {
   MatchEventLog,
 } from "@dev-camcard/protocol";
 import {
-  createSeededMatchState,
-  createMarketState,
+  buildReplayInitialState,
+  hashStringToSeed,
   reduce,
   toPublicMatchView,
   toPrivatePlayerView,
@@ -162,30 +162,18 @@ export class GameRoom extends Room {
   onCreate(options: unknown): void {
     const opts = (options ?? {}) as { seed?: number | string };
     const seedInput = opts.seed ?? this.roomId;
+    const initialSeed =
+      typeof seedInput === "string" ? hashStringToSeed(seedInput) : (seedInput | 0) >>> 0;
 
-    const { state: baseState, rng, genId, counter } = createSeededMatchState(
-      this.roomId,
-      ruleset,
-      ["玩家一", "玩家二"],
-      seedInput
-    );
-    const initialSeed = baseState.initialSeed;
-
-    // 用引擎纯函数构造真实市场状态（每栏公开 2 张，其余入隐藏牌堆，已洗牌）
-    // 用 seeded rng 洗牌 —— 保证相同 seed 下市场初始布局一致
+    // 与 replay.ts 共用同一条初始化路径，确保 live 与回放重建逐字节一致。
     const laneDefinitions = buildLaneDefinitions(marketRules, ruleset.marketLanesCount);
-    const market = createMarketState(
+    this.matchState = buildReplayInitialState({
+      roomId: this.roomId,
+      ruleset,
+      playerNames: ["玩家一", "玩家二"],
+      initialSeed,
       laneDefinitions,
-      ruleset.marketSlotsPerLane,
-      genId,
-      () => rng.next()
-    );
-    this.matchState = {
-      ...baseState,
-      market,
-      rngState: rng.state(),
-      idCounter: counter(),
-    };
+    });
 
     // 初始化快照元数据（含 seed，供回放重建使用）
     this.matchSnapshot = {
