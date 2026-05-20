@@ -525,6 +525,21 @@
         color: #ffaacc;
         border-color: rgba(255, 170, 204, 0.4);
       }
+      /* hover-ref：悬浮一张带 condition 的卡牌时，对应 chip 被点亮 */
+      .hand-area .hand-title .cond.hover-ref {
+        box-shadow: 0 0 0 2px rgba(120, 180, 255, 0.55);
+        transform: translateY(-1px);
+        transition: box-shadow 100ms ease, transform 100ms ease;
+      }
+      .hand-area .hand-title .cond.hover-ref-unmet {
+        background: #4a1c24;
+        color: #ffb0bb;
+        border-color: rgba(255, 120, 140, 0.6);
+        box-shadow: 0 0 0 2px rgba(255, 110, 130, 0.55);
+      }
+      .hand-card.has-cond {
+        cursor: help;
+      }
       .hand-cards {
         display: flex;
         gap: 6px;
@@ -739,7 +754,7 @@
       .modal-card .replay-table {
         font-family: ui-monospace, "JetBrains Mono", monospace;
         font-size: 11.5px;
-        max-height: 60vh;
+        max-height: 50vh;
         overflow: auto;
       }
       .modal-card .replay-table .row {
@@ -749,12 +764,92 @@
         padding: 4px 0;
         border-bottom: 1px solid rgba(255, 255, 255, 0.04);
       }
+      .modal-card .replay-table .row.clickable {
+        cursor: pointer;
+      }
+      .modal-card .replay-table .row.clickable:hover {
+        background: rgba(255, 255, 255, 0.04);
+      }
+      .modal-card .replay-table .row.past {
+        opacity: 0.55;
+      }
+      .modal-card .replay-table .row.current {
+        background: rgba(80, 140, 255, 0.18);
+        color: #ffffff;
+        box-shadow: inset 3px 0 0 #5aa0ff;
+        font-weight: 600;
+        opacity: 1;
+      }
       .modal-card .replay-table .head {
         color: #8888aa;
         font-weight: 600;
+        position: sticky;
+        top: 0;
+        background: #1a1a24;
+        z-index: 1;
       }
       .modal-card .replay-table .seq {
         color: #666688;
+      }
+      .modal-card .replay-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        margin-bottom: 8px;
+      }
+      .modal-card .replay-ctrl-btn {
+        font-size: 12px;
+        padding: 4px 10px;
+        border-radius: 6px;
+        background: #2a2a36;
+        color: #d0d0e0;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        cursor: pointer;
+        transition: background 120ms ease, opacity 120ms ease;
+      }
+      .modal-card .replay-ctrl-btn:hover:not(:disabled) {
+        background: #3a3a4c;
+      }
+      .modal-card .replay-ctrl-btn:disabled {
+        opacity: 0.35;
+        cursor: not-allowed;
+      }
+      .modal-card .replay-ctrl-btn.active {
+        background: #5aa0ff;
+        color: #0a0a14;
+        border-color: #5aa0ff;
+      }
+      .modal-card .replay-speed-group {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        margin-left: auto;
+      }
+      .modal-card .replay-speed-label {
+        font-size: 11px;
+        color: #888899;
+        margin-right: 2px;
+      }
+      .modal-card .replay-progress {
+        font-size: 12px;
+        color: #aaaabb;
+        margin-bottom: 4px;
+        font-family: ui-monospace, "JetBrains Mono", monospace;
+      }
+      .modal-card .replay-progress-bar {
+        height: 3px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 2px;
+        overflow: hidden;
+        margin-bottom: 8px;
+      }
+      .modal-card .replay-progress-bar .fill {
+        height: 100%;
+        background: linear-gradient(90deg, #5aa0ff, #b07aff);
+        transition: width 160ms ease;
       }
 
       .end-banner {
@@ -1059,7 +1154,7 @@
 
       <div id="g-replay-modal" class="modal hidden">
         <div class="modal-card large">
-          <h3>事件日志 / 回放骨架</h3>
+          <h3>对局回放（逐事件浏览器）</h3>
           <div id="g-replay-body"></div>
           <button class="close-btn" id="g-replay-close" type="button">关闭</button>
         </div>

@@ -29,7 +29,7 @@ scripts/deploy.sh             # build + up -d
 | --- | --- |
 | 玩家主页面（lobby） | <http://${HOST}:3000> |
 | Colyseus 房间服务 | ws://${HOST}:3000/matchmake/* + ws://${HOST}:3000/<processId>/<roomId> *(经 nginx 同域反代)* |
-| 只读对局 API      | <http://${HOST}:3000/api/matches> *(经 nginx 同域反代)* |
+| 只读对局 API      | <http://${HOST}:3000/api/matches>、`/:id/events`、`/:id/metrics` *(经 nginx 同域反代)* |
 | 只读卡牌 API      | <http://${HOST}:3000/api/cards> *(经 nginx 同域反代)* |
 | Server 健康检查   | <http://${HOST}:3000/health> *(经 nginx 同域反代)* |
 | 运营后台（Next.js）| <http://${HOST}:3000/admin> *(经 nginx 同域反代)* — 直连入口 <http://${HOST}:3001/admin> |
@@ -127,6 +127,27 @@ pnpm typecheck
 > 如果你不希望走同域反代（例如 admin 想用独立子域名），把 `NEXT_BASE_PATH` 与 `VITE_ADMIN_URL` 都置空，并在 `.env` 里把 `VITE_ADMIN_URL` 改成完整 URL（如 `https://admin.example.com`）即可。
 
 ## 常用运维动作
+
+推荐入口是项目根目录的 `Makefile`（`scripts/deploy.sh` 的语义化封装 + 新增在线更新流程）：
+
+```bash
+make            # 列出全部目标
+make up         # 首次部署 / 冷启动 (build + up -d)
+make update     # ★ 在线更新：git pull → rebuild → prisma migrate → 滚动重启（保留 postgres 数据卷）
+make update-local  # 本地已改完代码不想 git pull：仅 rebuild + migrate + restart
+make down       # 停止容器（保留数据卷）
+make destroy    # 停止 + 删除数据卷（会确认）
+make logs       # tail 最近 200 行全部服务日志
+make migrate    # 单独跑一次 prisma migrate deploy
+make ps         # 查看容器状态
+make backup-db  # dump postgres 到 ./backups/<时间戳>.sql
+```
+
+> `make update` 是日常上线节奏的"安全键"：始终 rebuild + migrate + 滚动重启，
+> 但永远不删除 postgres 数据卷。如果工作区有未提交改动会被中止，避免 `git pull --ff-only`
+> 覆盖本地代码。
+
+如果不想用 make，原始脚本仍然可用：
 
 ```bash
 scripts/deploy.sh up         # build + up -d（缺省动作）
