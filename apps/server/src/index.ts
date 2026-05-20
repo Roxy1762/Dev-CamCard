@@ -10,6 +10,7 @@ import {
   listSupportedLocales,
   listRuleSets,
 } from "./cardCatalog";
+import { computeMatchMetrics } from "./matchMetrics";
 
 const port = Number(process.env.PORT ?? 2567);
 
@@ -156,6 +157,40 @@ app.get("/api/matches/:id/events", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/matches/:id/metrics
+ * 从事件流中聚合出对局观测指标（P1-3 平衡验证与观测）。
+ *
+ * 计算口径：
+ *  - duration : MATCH_START → MATCH_END 之间的 ts 差（毫秒），无 MATCH_END 则按最末事件兜底。
+ *  - turns    : END_TURN 事件总数（开局首回合也算）。
+ *  - perSide  : 每个 side 的命令分布、攻击次数与总攻击量。
+ *
+ * 不修改任何 schema —— 完全基于已落库的 matchEvent。下一步若需要更细的伤害分桶
+ * （场馆 vs 玩家、guard 拦截量），可以在引擎层 emit 额外事件后再扩展这里的口径。
+ */
+app.get("/api/matches/:id/metrics", async (req, res) => {
+  try {
+    const prisma = getPrisma();
+    const match = await prisma.match.findUnique({
+      where: { id: req.params.id },
+      include: { players: { orderBy: { side: "asc" } } },
+    });
+    if (!match) {
+      res.status(404).json({ error: "对局不存在" });
+      return;
+    }
+    const events = await prisma.matchEvent.findMany({
+      where: { matchId: req.params.id },
+      orderBy: { seq: "asc" },
+    });
+    res.json(computeMatchMetrics(events, match));
+  } catch (err) {
+    console.error("[API] GET /api/matches/:id/metrics 失败:", err);
+    res.status(500).json({ error: "查询失败" });
+  }
+});
+
 // ── 卡牌内容只读 API（运营后台用） ─────────────────────────────────────────────
 
 const SUPPORTED_LOCALES = new Set<string>(listSupportedLocales());
@@ -234,6 +269,7 @@ function serializeEvent(e: EventRow) {
     data: e.data,
   };
 }
+
 
 // ── Colyseus 服务器 ──────────────────────────────────────────────────────────
 

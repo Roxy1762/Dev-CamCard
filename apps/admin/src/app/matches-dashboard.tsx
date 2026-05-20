@@ -22,6 +22,35 @@ type MatchEventRow = {
   data: unknown;
 };
 
+type MatchMetricsSide = {
+  side: number;
+  name: string;
+  cardsPlayed: number;
+  cardsScheduled: number;
+  marketBuys: number;
+  reservedBuys: number;
+  fixedBuys: number;
+  totalBuys: number;
+  venuesActivated: number;
+  attackCommands: number;
+  totalAttackAmount: number;
+  attacksOnPlayer: number;
+  attacksOnVenue: number;
+};
+
+type MatchMetrics = {
+  matchId: string;
+  rulesetVersion: string;
+  startedAt: string;
+  endedAt: string | null;
+  winner: number | null;
+  totalEvents: number;
+  turns: number;
+  durationMs: number | null;
+  avgTurnMs: number | null;
+  perSide: MatchMetricsSide[];
+};
+
 type DashboardProps = { apiBase: string };
 
 /** 自动刷新可选间隔。"off" 表示关闭。 */
@@ -39,6 +68,8 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
   const [selected, setSelected] = useState<string | null>(null);
   const [events, setEvents] = useState<MatchEventRow[] | null>(null);
   const [eventsLoading, setEventsLoading] = useState(false);
+  const [metrics, setMetrics] = useState<MatchMetrics | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
   const [refreshKey, setRefreshKey] = useState<string>("30s");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState<string>("all");
@@ -74,21 +105,41 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
   const openEvents = useCallback(async (matchId: string) => {
     setSelected(matchId);
     setEvents(null);
+    setMetrics(null);
     setEventsLoading(true);
+    setMetricsLoading(true);
     setEventTypeFilter("all");
-    try {
-      const res = await fetch(`/api/matches/${matchId}/events`, {
-        cache: "no-store",
-      });
-      if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
-      const data = (await res.json()) as MatchEventRow[];
-      setEvents(data);
-    } catch (e) {
-      setEvents([]);
-      setErr(e instanceof Error ? e.message : String(e));
-    } finally {
-      setEventsLoading(false);
-    }
+    // 同时拉事件流与指标聚合，两条请求互不阻塞
+    void (async () => {
+      try {
+        const res = await fetch(`/api/matches/${matchId}/events`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const data = (await res.json()) as MatchEventRow[];
+        setEvents(data);
+      } catch (e) {
+        setEvents([]);
+        setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        setEventsLoading(false);
+      }
+    })();
+    void (async () => {
+      try {
+        const res = await fetch(`/api/matches/${matchId}/metrics`, {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const data = (await res.json()) as MatchMetrics;
+        setMetrics(data);
+      } catch {
+        // 指标失败不阻塞事件流展示 —— 静默兜底，避免 panel 永远进不去。
+        setMetrics(null);
+      } finally {
+        setMetricsLoading(false);
+      }
+    })();
   }, []);
 
   // ── 统计：总场数 / 进行中 / 完结 / 平均时长 ──────────────────────────────
@@ -330,6 +381,7 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
               onClick={() => {
                 setSelected(null);
                 setEvents(null);
+                setMetrics(null);
               }}
               style={{
                 marginLeft: "auto",
@@ -341,6 +393,13 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
               关闭 ✕
             </button>
           </header>
+
+          {/* 对局指标聚合（P1-3）：在事件流上方先给一个一眼可读的小看板 */}
+          <MatchMetricsPanel
+            metrics={metrics}
+            loading={metricsLoading}
+          />
+
           {eventsLoading && <p style={{ color: "#888" }}>加载事件中...</p>}
           {!eventsLoading && events && events.length === 0 && (
             <p style={{ color: "#888" }}>无事件。</p>
@@ -413,6 +472,117 @@ function StatCard({
         {value}
       </div>
     </div>
+  );
+}
+
+// ── 对局指标看板（P1-3 平衡观测） ─────────────────────────────────────────────
+// 渲染规则：
+//   - loading：占位
+//   - 无 metrics（接口失败 / 旧数据）：直接不渲染，避免污染 UI
+//   - 有 metrics：渲染 4 个 KPI（回合数 / 时长 / 平均回合时长 / 总事件）+ 双侧对照表
+function MatchMetricsPanel({
+  metrics,
+  loading,
+}: {
+  metrics: MatchMetrics | null;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <div style={{ color: "#888", padding: "0.25rem 0" }}>加载对局指标中...</div>
+    );
+  }
+  if (!metrics) return null;
+
+  const durSec =
+    metrics.durationMs !== null ? Math.round(metrics.durationMs / 1000) : null;
+  const avgSec =
+    metrics.avgTurnMs !== null ? Math.round(metrics.avgTurnMs / 1000) : null;
+
+  return (
+    <section
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "0.5rem",
+        padding: "0.75rem",
+        border: "1px solid #e5e7ee",
+        borderRadius: 8,
+        background: "#fafbfd",
+      }}
+    >
+      <header style={{ fontWeight: 600, color: "#444" }}>对局指标</header>
+      <div style={statsRow}>
+        <StatCard label="回合数" value={String(metrics.turns)} />
+        <StatCard
+          label="对局时长"
+          value={durSec === null ? "—" : fmtDuration(durSec)}
+        />
+        <StatCard
+          label="平均每回合"
+          value={avgSec === null ? "—" : fmtDuration(avgSec)}
+        />
+        <StatCard label="事件总数" value={String(metrics.totalEvents)} />
+      </div>
+
+      <table style={{ width: "100%", borderCollapse: "collapse", marginTop: 4 }}>
+        <thead>
+          <tr style={{ background: "#f0f2f8" }}>
+            <th style={cellHead}>玩家</th>
+            <th style={cellHead}>出牌</th>
+            <th style={cellHead}>安排</th>
+            <th style={cellHead}>市场买</th>
+            <th style={cellHead}>预约买</th>
+            <th style={cellHead}>固定补给</th>
+            <th style={cellHead}>购买合计</th>
+            <th style={cellHead}>激活场馆</th>
+            <th style={cellHead}>攻击次数</th>
+            <th style={cellHead}>总攻击量</th>
+            <th style={cellHead}>打玩家 / 场馆</th>
+          </tr>
+        </thead>
+        <tbody>
+          {metrics.perSide.map((p) => (
+            <tr key={p.side} style={{ borderBottom: "1px solid #eee" }}>
+              <td style={cell}>
+                <strong>P{p.side + 1}</strong>{" "}
+                <span style={{ color: "#888" }}>{p.name}</span>
+                {metrics.winner === p.side && (
+                  <span
+                    style={{
+                      marginLeft: 6,
+                      padding: "0 6px",
+                      background: "#dcfbe2",
+                      color: "#1f7a36",
+                      borderRadius: 4,
+                      fontSize: "0.7rem",
+                    }}
+                  >
+                    胜
+                  </span>
+                )}
+              </td>
+              <td style={cell}>{p.cardsPlayed}</td>
+              <td style={cell}>{p.cardsScheduled}</td>
+              <td style={cell}>{p.marketBuys}</td>
+              <td style={cell}>{p.reservedBuys}</td>
+              <td style={cell}>{p.fixedBuys}</td>
+              <td style={cell}>
+                <strong>{p.totalBuys}</strong>
+              </td>
+              <td style={cell}>{p.venuesActivated}</td>
+              <td style={cell}>{p.attackCommands}</td>
+              <td style={cell}>
+                <strong>{p.totalAttackAmount}</strong>
+              </td>
+              <td style={cell}>
+                {p.attacksOnPlayer} / {p.attacksOnVenue}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
   );
 }
 

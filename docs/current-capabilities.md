@@ -28,15 +28,24 @@
 
 ### 5) 联机与持久化
 - 断线重连（60 秒）可用。
-- 事件日志可拉取，回放入口已接通（当前为日志视图，HTML 模态弹层），且回放界面返回链路稳定。
+- 事件日志可拉取，回放入口已升级为"逐事件浏览器"：HTML 模态弹层 + 步进 /
+  自动播放（1x/2x/4x） / 跳转 / 进度条 / 当前 cursor 行高亮 + 已过事件淡化。
+  控制层与表格渲染解耦，下一步只需把表格行替换为 `replayFromEvents` 输出的逐帧
+  state 投影，即可完成 P0-4 最终一步。
 - Prisma + PostgreSQL 持久化可用，含 Match / MatchPlayer / MatchEvent；已补齐 Match 创建与玩家/事件写入之间的时序等待，避免极端竞争下丢记录。
-- 提供只读 API：`/api/matches`、`/api/matches/:id`、`/api/matches/:id/events`。
+- 提供只读 API：`/api/matches`、`/api/matches/:id`、`/api/matches/:id/events`、
+  `/api/matches/:id/metrics`（对局指标聚合，纯函数从 matchEvent 流投影，覆盖
+  turns / durationMs / avgTurnMs / 双侧命令分布 + 攻击量分桶）。
 
 ### 6) 可见性与客户端
 - Public/Private 视图分层已落地。
 - 场馆耐久字段（`durability/maxDurability`）已在公开视图与客户端显示链路中。
 - 客户端已补齐“攻击场馆”操作入口、guard 阻挡提示、服务端错误消息可视反馈。
 - RoomClient 已支持更稳健的默认 WS 地址推导；server 端 CORS 支持多 origin 白名单。
+- 条件状态条 ↔ 卡牌悬浮联动：hover 一张 condition 牌时，状态条上对应的 chip
+  会蓝色高亮（已满足）/ 红色高亮（未满足），由
+  `apps/game-client/src/content/cardConditions.ts` 在构建期从规则 JSON 投影出
+  cardId → conditionKey 索引，零网络往返。
 
 ### 7) 可复现性基础（Mulberry32 seeded RNG）
 - 统一 RNG 模块：`packages/engine/src/rng.ts`（`createSeededRng` / `hashStringToSeed` / `createSeededIdFactory`）。

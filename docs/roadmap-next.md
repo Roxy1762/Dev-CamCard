@@ -26,9 +26,13 @@
     保证 live 与回放从同一字节起点出发。
   - `reconstructCommand` + `replayFromEvents` 能把 `MatchEvent` 流逐步推回
     `InternalMatchState` 序列，单步出错不打断流程。
-- 下一步：把回放（HTML 模态弹层）从"事件列表查看器"升级为"逐事件重建播放器"
-  —— 用 `replayFromEvents` 输出的逐帧 state 投影成 PublicMatchView / 私有视图，
-  并加上步进 / 自动播放 / 跳转控件。
+- ✅ 回放模态已升级为"逐事件浏览器"（控制层）：
+  - 步进按钮 `⏮ 起点 / ◀ 上一步 / ▶ 播放 / 下一步 ▶ / ⏭ 末尾`，自动播放支持 1x/2x/4x。
+  - 当前 cursor 行高亮 + 已过事件淡化 + 进度条；点击任意行可直接跳转。
+  - 控制层与 cursor 状态独立于事件渲染，后续把表格行替换为 `replayFromEvents`
+    输出的 PublicMatchView 投影即可完成最终一步，不再需要动 UI 框架。
+- 下一步（剩余工作）：把"事件表格行" 替换为 `replayFromEvents` 输出的逐帧 state →
+  PublicMatchView / PrivatePlayerView 投影渲染（已知 cursor 后只需一次 reduce 链路）。
 
 ### P0-5 schema 收紧
 - 收敛 effect union 与 schema 的一一对应关系。
@@ -47,8 +51,15 @@
 - 下一步：基于对局数据继续微调 cost 与数值，观察中期购买密度与压力税感是否过强/过弱。
 
 ### P1-3 平衡验证与观测
-- 补充对局级指标（回合时长、平均伤害、购买分布）。
-- 用小规模自动对局/回放数据辅助调参与回归。
+- ✅ 对局指标聚合最小实现已落地：
+  - 服务端：`/api/matches/:id/metrics` 由 `apps/server/src/matchMetrics.ts` 纯函数
+    聚合事件流，输出 `turns / durationMs / avgTurnMs` 与每位玩家的命令分布
+    （出牌 / 安排 / 三类购买 / 激活场馆 / 攻击次数 / 总攻击量 / 打玩家 vs 场馆）。
+  - 客户端：admin → 选中对局后展示 `MatchMetricsPanel`（4 KPI + 双侧对照表）。
+  - 测试：`apps/server/src/__tests__/matchMetrics.test.ts` 覆盖空流 / 命令分桶 /
+    攻击聚合 / 时长口径 / bigint ts 兼容 / 玩家名兜底。
+- 下一步：在引擎层 emit 更细粒度事件（如 `VENUE_DESTROYED` / 实际命中量），把
+  "ASSIGN_ATTACK 总额" 升级为 "实际伤害 vs guard 拦截量" 的桶。
 
 ## P2：玩法特色扩充
 
@@ -64,11 +75,15 @@
   - 客户端补更强提示（当前哪些条件已满足），降低机制牌理解门槛。
 
 ### P2-2 客户端体验增强
-- 回放模态升级为可步进复盘播放器（结合 P0-4）。
+- ✅ 回放模态已落地"逐事件浏览器"控制层（详见 P0-4）。
 - 攻击、选择、日志与提示信息做统一可视反馈（CSS 动画 + 状态高亮）。
 - ✅ 手牌悬浮预览（hover 显示卡牌完整文案）—— 帮助玩家在打出前看清效果。
 - ✅ 机制条件状态条 —— 在手牌区上方实时显示"已安排 / 已预约 / 有场馆 / 有值守"
   四个布尔条件，让带 condition 触发的牌不再需要靠记忆判断。
+- ✅ 条件状态条 ↔ 卡牌悬浮联动：玩家 hover 一张带 condition 触发的手牌时，状态条
+  对应的 chip 蓝色高亮（已满足）/ 红色高亮（未满足），不必再去对照文字推断
+  "现在打出会不会触发"。卡牌 → 条件的索引由 `apps/game-client/src/content/cardConditions.ts`
+  在构建期从 `data/cards/rules/*.json` 抽取。
 
 ### P2-2-future 特效叠加层（暂未排期）
 - HTML 主层 + Phaser canvas 特效叠加层混合架构。

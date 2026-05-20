@@ -30,7 +30,6 @@ import type {
   PublicCardRef,
   PendingChoiceView,
   MatchEvent,
-  MatchEventLog,
 } from "@dev-camcard/protocol";
 import { CMD } from "@dev-camcard/protocol";
 import type { RoomClient } from "../network/RoomClient";
@@ -39,6 +38,7 @@ import {
   type BoardViewModel,
 } from "../viewmodel/BoardViewModel";
 import type { CardTextEntry } from "../content/clientLocale";
+import { getCardConditions, type ConditionKey } from "../content/cardConditions";
 import {
   getSettings,
   subscribeSettings,
@@ -161,6 +161,15 @@ export class HtmlGameView {
   /** 防止重复请求事件日志。 */
   private replayLoading = false;
 
+  /** 当前已加载的回放数据（用于 step / 自动播放）。 */
+  private replayEvents: MatchEvent[] = [];
+  /** 当前光标指向的事件下标（-1 = 对局起点，未应用任何事件）。 */
+  private replayCursor = -1;
+  /** 自动播放计时器（null = 暂停）。 */
+  private replayAutoTimer: ReturnType<typeof setInterval> | null = null;
+  /** 自动播放速度（事件 / 秒）。 */
+  private replaySpeed = 2;
+
   constructor(opts: HtmlGameViewOptions) {
     this.client = opts.roomClient;
     this.cardNames = opts.cardNames;
@@ -221,6 +230,7 @@ export class HtmlGameView {
       clearTimeout(this.errorTimer);
       this.errorTimer = null;
     }
+    this.stopReplayAutoplay();
     this.client.onStateUpdate = null;
     this.client.onPrivateUpdate = null;
     this.client.onEventLog = null;
@@ -267,10 +277,12 @@ export class HtmlGameView {
       void this.openReplay();
     });
     this.dom.replayClose.addEventListener("click", () => {
+      this.stopReplayAutoplay();
       this.dom.replayModal.classList.add("hidden");
     });
     this.dom.replayModal.addEventListener("click", (e) => {
       if (e.target === this.dom.replayModal) {
+        this.stopReplayAutoplay();
         this.dom.replayModal.classList.add("hidden");
       }
     });
@@ -414,23 +426,32 @@ export class HtmlGameView {
   // 实时投影成视觉 chip：active = 已满足 / inactive = 未满足。
   // 玩家不需要再去回想"我现在有没有场馆"才能判断带条件触发的牌能不能触发。
 
+  /**
+   * 当前对局视角下，每个条件键的"是否满足"。
+   * 由 renderConditions 写入，由 hand-card hover 读取（避免把整个 vm 透传给 hover handler）。
+   * "guard" 不参与卡牌悬浮高亮 —— 它是对方状态而不是己方条件。
+   */
+  private conditionState: Record<ConditionKey, boolean> = {
+    scheduled: false,
+    reserved: false,
+    venue: false,
+  };
+
   private renderConditions(vm: BoardViewModel): void {
-    const conds: Array<{ key: string; label: string; active: boolean; danger?: boolean }> = [
-      {
-        key: "scheduled",
-        label: "已安排",
-        active: vm.me.scheduleSlots.some((s) => s !== null),
-      },
-      {
-        key: "reserved",
-        label: "已预约",
-        active: vm.me.reservedCard !== null,
-      },
-      {
-        key: "venue",
-        label: "有场馆",
-        active: vm.me.venues.length > 0,
-      },
+    const scheduled = vm.me.scheduleSlots.some((s) => s !== null);
+    const reserved = vm.me.reservedCard !== null;
+    const venue = vm.me.venues.length > 0;
+    this.conditionState = { scheduled, reserved, venue };
+
+    const conds: Array<{
+      key: string;
+      label: string;
+      active: boolean;
+      danger?: boolean;
+    }> = [
+      { key: "scheduled", label: "已安排", active: scheduled },
+      { key: "reserved", label: "已预约", active: reserved },
+      { key: "venue", label: "有场馆", active: venue },
       {
         key: "guard",
         label: "对方值守",
@@ -442,13 +463,46 @@ export class HtmlGameView {
     this.dom.conditions.innerHTML = "";
     for (const c of conds) {
       const span = document.createElement("span");
-      span.className = "cond" + (c.active ? " active" : "") + (c.danger && c.active ? " guard" : "");
+      span.className =
+        "cond" + (c.active ? " active" : "") + (c.danger && c.active ? " guard" : "");
+      // data-cond-key 让 hand-card hover 能精确定位到对应 chip 做高亮
+      span.dataset["condKey"] = c.key;
       span.textContent = (c.active ? "✓ " : "○ ") + c.label;
       span.title = c.active
         ? `${c.label}：当前已满足`
         : `${c.label}：当前未满足`;
       this.dom.conditions.appendChild(span);
     }
+  }
+
+  /**
+   * 给条件 chip 加上"被卡牌引用"的视觉提示。
+   * 进入 hover：把对应 key 的 chip 标为 highlight + 满足 / 未满足色块。
+   * 离开 hover：清除所有标记。
+   */
+  private highlightConditionsForCard(cardId: string | null): void {
+    const chips = this.dom.conditions.querySelectorAll<HTMLElement>(".cond");
+    if (cardId === null) {
+      chips.forEach((c) => {
+        c.classList.remove("hover-ref", "hover-ref-unmet");
+      });
+      return;
+    }
+    const required = getCardConditions(cardId);
+    chips.forEach((c) => {
+      const key = c.dataset["condKey"] as ConditionKey | "guard" | undefined;
+      if (!key || key === "guard" || !required || !required.has(key)) {
+        c.classList.remove("hover-ref", "hover-ref-unmet");
+        return;
+      }
+      c.classList.add("hover-ref");
+      // 条件未满足：额外打红，提示"现在打出条件不会触发"
+      if (!this.conditionState[key]) {
+        c.classList.add("hover-ref-unmet");
+      } else {
+        c.classList.remove("hover-ref-unmet");
+      }
+    });
   }
 
   // ── 顶部信息栏 ────────────────────────────────────────────────────────────
@@ -765,6 +819,25 @@ export class HtmlGameView {
       const el = document.createElement("div");
       el.className = "hand-card";
       this.attachTooltip(el, card.id);
+
+      // 当卡牌带条件触发时，悬浮时把上方条件 chip 联动高亮（已满足 = 蓝，未满足 = 红）
+      const condRefs = getCardConditions(card.id);
+      if (condRefs && condRefs.size > 0) {
+        el.classList.add("has-cond");
+        el.addEventListener("mouseenter", () =>
+          this.highlightConditionsForCard(card.id)
+        );
+        el.addEventListener("mouseleave", () =>
+          this.highlightConditionsForCard(null)
+        );
+        // focus 链路（键盘 tab 用）
+        el.addEventListener("focusin", () =>
+          this.highlightConditionsForCard(card.id)
+        );
+        el.addEventListener("focusout", () =>
+          this.highlightConditionsForCard(null)
+        );
+      }
 
       const name = document.createElement("div");
       name.className = "name";
@@ -1097,7 +1170,11 @@ export class HtmlGameView {
     this.dom.replayBtn.textContent = "回放加载中...";
     try {
       const log = await this.client.requestEventLogOnce();
-      this.renderReplay(log);
+      this.replayEvents = log.events;
+      // 起点设为 "未应用任何事件"（-1），让玩家从开局开始单步推进。
+      this.replayCursor = -1;
+      this.stopReplayAutoplay();
+      this.renderReplay();
       this.dom.replayModal.classList.remove("hidden");
     } catch (err) {
       this.showError(
@@ -1109,15 +1186,149 @@ export class HtmlGameView {
     }
   }
 
-  private renderReplay(log: MatchEventLog): void {
+  // ── 回放控制 ───────────────────────────────────────────────────────────────
+  // 把"事件日志查看器"升级为"逐事件浏览器"：
+  //   - 步进：prev / next / first / last
+  //   - 自动播放：play (速度 1x / 2x / 4x) / pause
+  //   - 跳转：点击任意行直接定位到对应 seq
+  //   - 高亮：当前 cursor 指向的行高亮显示
+  //
+  // 注：完整的"逐帧 PublicMatchView 投影"仍在路上（packages/engine/src/replay.ts
+  // 已提供 replayFromEvents 原语）。目前这一步先把控制层抽出来，下一步只需把
+  // 高亮行替换为渲染整张牌桌即可，不需要再动 UI 框架。
+
+  private stopReplayAutoplay(): void {
+    if (this.replayAutoTimer !== null) {
+      clearInterval(this.replayAutoTimer);
+      this.replayAutoTimer = null;
+    }
+  }
+
+  private startReplayAutoplay(): void {
+    this.stopReplayAutoplay();
+    const intervalMs = Math.max(80, Math.round(1000 / this.replaySpeed));
+    this.replayAutoTimer = setInterval(() => {
+      if (this.replayCursor >= this.replayEvents.length - 1) {
+        this.stopReplayAutoplay();
+        this.renderReplay();
+        return;
+      }
+      this.replayCursor += 1;
+      this.renderReplay();
+    }, intervalMs);
+  }
+
+  private replayStep(delta: number): void {
+    this.stopReplayAutoplay();
+    const next = this.replayCursor + delta;
+    this.replayCursor = Math.max(-1, Math.min(this.replayEvents.length - 1, next));
+    this.renderReplay();
+  }
+
+  private replayJumpTo(idx: number): void {
+    this.stopReplayAutoplay();
+    this.replayCursor = Math.max(-1, Math.min(this.replayEvents.length - 1, idx));
+    this.renderReplay();
+  }
+
+  private replaySetSpeed(speed: number): void {
+    this.replaySpeed = speed;
+    if (this.replayAutoTimer !== null) {
+      // 播放中改速度立刻生效
+      this.startReplayAutoplay();
+    }
+    this.renderReplay();
+  }
+
+  private renderReplay(): void {
+    const events = this.replayEvents;
     this.dom.replayBody.innerHTML = "";
-    if (log.events.length === 0) {
+
+    if (events.length === 0) {
       const empty = document.createElement("div");
       empty.style.color = "#666677";
       empty.textContent = "（暂无事件记录）";
       this.dom.replayBody.appendChild(empty);
       return;
     }
+
+    // 顶部控制条
+    const controls = document.createElement("div");
+    controls.className = "replay-controls";
+
+    const isPlaying = this.replayAutoTimer !== null;
+    const atStart = this.replayCursor <= -1;
+    const atEnd = this.replayCursor >= events.length - 1;
+
+    const mkBtn = (
+      label: string,
+      onClick: () => void,
+      opts: { disabled?: boolean; active?: boolean } = {}
+    ): HTMLButtonElement => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = label;
+      b.className = "replay-ctrl-btn" + (opts.active ? " active" : "");
+      b.disabled = opts.disabled === true;
+      b.addEventListener("click", onClick);
+      return b;
+    };
+
+    controls.appendChild(mkBtn("⏮ 起点", () => this.replayJumpTo(-1), { disabled: atStart }));
+    controls.appendChild(mkBtn("◀ 上一步", () => this.replayStep(-1), { disabled: atStart }));
+    if (isPlaying) {
+      controls.appendChild(mkBtn("⏸ 暂停", () => {
+        this.stopReplayAutoplay();
+        this.renderReplay();
+      }));
+    } else {
+      controls.appendChild(
+        mkBtn("▶ 播放", () => this.startReplayAutoplay(), { disabled: atEnd })
+      );
+    }
+    controls.appendChild(mkBtn("下一步 ▶", () => this.replayStep(1), { disabled: atEnd }));
+    controls.appendChild(
+      mkBtn("⏭ 末尾", () => this.replayJumpTo(events.length - 1), { disabled: atEnd })
+    );
+
+    // 速度切换
+    const speedGroup = document.createElement("div");
+    speedGroup.className = "replay-speed-group";
+    const speedLabel = document.createElement("span");
+    speedLabel.className = "replay-speed-label";
+    speedLabel.textContent = "速度";
+    speedGroup.appendChild(speedLabel);
+    for (const s of [1, 2, 4]) {
+      speedGroup.appendChild(
+        mkBtn(`${s}x`, () => this.replaySetSpeed(s), { active: this.replaySpeed === s })
+      );
+    }
+    controls.appendChild(speedGroup);
+
+    this.dom.replayBody.appendChild(controls);
+
+    // 进度指示
+    const progress = document.createElement("div");
+    progress.className = "replay-progress";
+    const shownIdx = this.replayCursor + 1; // 1-based, 0 = 起点
+    progress.textContent =
+      this.replayCursor < 0
+        ? `起点（共 ${events.length} 条事件）`
+        : `第 ${shownIdx} / ${events.length} 条事件 · seq=${events[this.replayCursor]!.seq}`;
+    this.dom.replayBody.appendChild(progress);
+
+    // 进度条（视觉）
+    const bar = document.createElement("div");
+    bar.className = "replay-progress-bar";
+    const fill = document.createElement("div");
+    fill.className = "fill";
+    fill.style.width = `${
+      events.length === 0 ? 0 : Math.max(0, this.replayCursor + 1) * 100 / events.length
+    }%`;
+    bar.appendChild(fill);
+    this.dom.replayBody.appendChild(bar);
+
+    // 事件表格
     const tbl = document.createElement("div");
     tbl.className = "replay-table";
 
@@ -1130,9 +1341,12 @@ export class HtmlGameView {
     }
     tbl.appendChild(head);
 
-    for (const evt of log.events) {
+    events.forEach((evt, idx) => {
       const row = document.createElement("div");
-      row.className = "row";
+      const isCurrent = idx === this.replayCursor;
+      const isPast = idx < this.replayCursor;
+      row.className =
+        "row clickable" + (isCurrent ? " current" : "") + (isPast ? " past" : "");
       const cells = [
         String(evt.seq),
         String(evt.ts).slice(-6),
@@ -1145,16 +1359,19 @@ export class HtmlGameView {
         c.textContent = v;
         row.appendChild(c);
       }
+      row.addEventListener("click", () => this.replayJumpTo(idx));
       tbl.appendChild(row);
-    }
+
+      // 滚动定位到当前行（仅当当前行不在视图内时）
+      if (isCurrent) {
+        // 延后到下一帧，等 DOM 挂载完
+        requestAnimationFrame(() => {
+          row.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+      }
+    });
 
     this.dom.replayBody.appendChild(tbl);
-
-    const meta = document.createElement("div");
-    meta.className = "meta";
-    meta.style.marginTop = "8px";
-    meta.textContent = `共 ${log.events.length} 条事件`;
-    this.dom.replayBody.appendChild(meta);
   }
 }
 
