@@ -52,4 +52,29 @@ describe("clientSettings", () => {
     _resetSettingsCacheForTesting();
     expect(getSettings().showShopPreview).toBe(true);
   });
+
+  it("tutorialSeen 默认 false，看过后置 true", () => {
+    expect(getSettings().tutorialSeen).toBe(false);
+    updateSettings({ tutorialSeen: true });
+    expect(getSettings().tutorialSeen).toBe(true);
+  });
+
+  it("tutorialSeen 写入后可从 storage 读回（持久化）", () => {
+    if (typeof localStorage === "undefined") return; // 仅在有 storage 的环境校验
+    updateSettings({ tutorialSeen: true });
+    _resetSettingsCacheForTesting();
+    expect(getSettings().tutorialSeen).toBe(true);
+  });
+
+  it("旧版本设置缺少 tutorialSeen 字段时降级为默认 false", () => {
+    if (typeof localStorage === "undefined") return;
+    localStorage.setItem(
+      "devCamCard_settings_v1",
+      JSON.stringify({ showShopPreview: false })
+    );
+    _resetSettingsCacheForTesting();
+    const s = getSettings();
+    expect(s.showShopPreview).toBe(false);
+    expect(s.tutorialSeen).toBe(false);
+  });
 });

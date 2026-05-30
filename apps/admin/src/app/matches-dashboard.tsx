@@ -73,6 +73,8 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
   const [refreshKey, setRefreshKey] = useState<string>("30s");
   const [lastRefreshedAt, setLastRefreshedAt] = useState<number | null>(null);
   const [eventTypeFilter, setEventTypeFilter] = useState<string>("all");
+  /** 详情面板模式：事件流（命令列表）或逐帧回放（牌桌状态）。 */
+  const [panelMode, setPanelMode] = useState<"events" | "replay">("events");
 
   const load = useCallback(async () => {
     setStatus("loading");
@@ -102,8 +104,9 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
     return () => clearInterval(id);
   }, [refreshKey, load]);
 
-  const openEvents = useCallback(async (matchId: string) => {
+  const openEvents = useCallback(async (matchId: string, mode: "events" | "replay" = "events") => {
     setSelected(matchId);
+    setPanelMode(mode);
     setEvents(null);
     setMetrics(null);
     setEventsLoading(true);
@@ -309,18 +312,34 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
                       </span>
                     </td>
                     <td style={cell}>
-                      <button
-                        type="button"
-                        onClick={() => void openEvents(m.id)}
-                        style={{
-                          padding: "0.2rem 0.6rem",
-                          cursor: "pointer",
-                          border: "1px solid #ccc",
-                          background: selected === m.id ? "#eee" : "#fff",
-                        }}
-                      >
-                        事件流
-                      </button>
+                      <div style={{ display: "flex", gap: "0.35rem" }}>
+                        <button
+                          type="button"
+                          onClick={() => void openEvents(m.id, "events")}
+                          style={{
+                            padding: "0.2rem 0.6rem",
+                            cursor: "pointer",
+                            border: "1px solid #ccc",
+                            background:
+                              selected === m.id && panelMode === "events" ? "#eee" : "#fff",
+                          }}
+                        >
+                          事件流
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void openEvents(m.id, "replay")}
+                          style={{
+                            padding: "0.2rem 0.6rem",
+                            cursor: "pointer",
+                            border: "1px solid #ccc",
+                            background:
+                              selected === m.id && panelMode === "replay" ? "#eee" : "#fff",
+                          }}
+                        >
+                          回放
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -349,9 +368,9 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
               flexWrap: "wrap",
             }}
           >
-            <strong>事件流：</strong>
+            <strong>{panelMode === "replay" ? "逐帧回放：" : "事件流："}</strong>
             <code style={{ fontSize: "0.8rem", color: "#444" }}>{selected}</code>
-            {events && events.length > 0 && (
+            {panelMode === "events" && events && events.length > 0 && (
               <>
                 <span style={{ color: "#888", fontSize: "0.85rem" }}>
                   共 {events.length} 条 / 当前 {filteredEvents.length} 条
@@ -400,35 +419,41 @@ export default function MatchesDashboard({ apiBase: _apiBase }: DashboardProps) 
             loading={metricsLoading}
           />
 
-          {eventsLoading && <p style={{ color: "#888" }}>加载事件中...</p>}
-          {!eventsLoading && events && events.length === 0 && (
-            <p style={{ color: "#888" }}>无事件。</p>
-          )}
-          {!eventsLoading && filteredEvents.length > 0 && (
-            <ol style={{ paddingLeft: "1.5rem", fontFamily: "monospace", fontSize: "0.8rem" }}>
-              {filteredEvents.map((e) => (
-                <li key={e.id} style={{ marginBottom: "0.25rem" }}>
-                  <span style={{ color: "#888" }}>#{e.seq}</span>{" "}
-                  <span style={{ color: "#06c" }}>{e.type}</span>
-                  {e.side != null && (
-                    <span style={{ color: "#999" }}> (side {e.side})</span>
-                  )}
-                  {e.data != null && (
-                    <pre
-                      style={{
-                        margin: "0.25rem 0 0",
-                        padding: "0.25rem 0.5rem",
-                        background: "#eee",
-                        whiteSpace: "pre-wrap",
-                        wordBreak: "break-word",
-                      }}
-                    >
-                      {safeStringify(e.data)}
-                    </pre>
-                  )}
-                </li>
-              ))}
-            </ol>
+          {panelMode === "replay" && selected && <ReplayViewer matchId={selected} />}
+
+          {panelMode === "events" && (
+            <>
+              {eventsLoading && <p style={{ color: "#888" }}>加载事件中...</p>}
+              {!eventsLoading && events && events.length === 0 && (
+                <p style={{ color: "#888" }}>无事件。</p>
+              )}
+              {!eventsLoading && filteredEvents.length > 0 && (
+                <ol style={{ paddingLeft: "1.5rem", fontFamily: "monospace", fontSize: "0.8rem" }}>
+                  {filteredEvents.map((e) => (
+                    <li key={e.id} style={{ marginBottom: "0.25rem" }}>
+                      <span style={{ color: "#888" }}>#{e.seq}</span>{" "}
+                      <span style={{ color: "#06c" }}>{e.type}</span>
+                      {e.side != null && (
+                        <span style={{ color: "#999" }}> (side {e.side})</span>
+                      )}
+                      {e.data != null && (
+                        <pre
+                          style={{
+                            margin: "0.25rem 0 0",
+                            padding: "0.25rem 0.5rem",
+                            background: "#eee",
+                            whiteSpace: "pre-wrap",
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {safeStringify(e.data)}
+                        </pre>
+                      )}
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </>
           )}
         </section>
       )}
@@ -585,6 +610,294 @@ function MatchMetricsPanel({
     </section>
   );
 }
+
+// ── 逐帧回放（P0-4 可复现回放的牌桌渲染层） ─────────────────────────────────
+// 消费 /api/matches/:id/replay 返回的逐帧 PublicMatchView，提供
+// 起点 / 上一步 / 播放(1x·2x·4x) / 下一步 / 末尾 + 进度条，并把当前帧的
+// 牌桌状态（双方 HP / 资源 / 攻击 / 场馆 / 日程 / 预约 + 三栏市场）渲染出来。
+
+type ReplayVenue = {
+  cardId: string;
+  durability: number;
+  maxDurability: number;
+  isGuard: boolean;
+  activationsLeft: number;
+};
+type ReplayCardRef = { id: string; instanceId: string };
+type ReplayPlayer = {
+  side: number;
+  name: string;
+  hp: number;
+  block: number;
+  deckSize: number;
+  handSize: number;
+  discardSize: number;
+  resourcePool: number;
+  attackPool: number;
+  venues: ReplayVenue[];
+  scheduleSlots: (ReplayCardRef | null)[];
+  reservedCard: ReplayCardRef | null;
+  pendingDiscardCount: number;
+};
+type ReplayMarketLane = { lane: string; slots: (ReplayCardRef | null)[] };
+type ReplayView = {
+  turnNumber: number;
+  activePlayer: number;
+  players: [ReplayPlayer, ReplayPlayer];
+  market: ReplayMarketLane[];
+  fixedSupplies: string[];
+  started: boolean;
+  ended: boolean;
+  winner: number | null;
+};
+type ReplayFrame = {
+  index: number;
+  seq: number;
+  ts: number;
+  type: string;
+  side: number | null;
+  error?: string;
+  view: ReplayView;
+};
+type ReplayResult = {
+  matchId: string;
+  initialSeed: number;
+  playerNames: [string, string];
+  initialView: ReplayView;
+  frameCount: number;
+  errors: Array<{ seq: number; type: string; message: string }>;
+  frames: ReplayFrame[];
+};
+
+const REPLAY_SPEEDS = [1, 2, 4];
+
+function ReplayViewer({ matchId }: { matchId: string }) {
+  const [result, setResult] = useState<ReplayResult | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  // -1 = 起点（initialView，未应用任何事件）；0..frameCount-1 = frames[cursor]
+  const [cursor, setCursor] = useState(-1);
+  const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(2);
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    setErr(null);
+    setResult(null);
+    setCursor(-1);
+    setPlaying(false);
+    void (async () => {
+      try {
+        const res = await fetch(`/api/matches/${matchId}/replay`, { cache: "no-store" });
+        if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
+        const data = (await res.json()) as ReplayResult;
+        if (alive) setResult(data);
+      } catch (e) {
+        if (alive) setErr(e instanceof Error ? e.message : String(e));
+      } finally {
+        if (alive) setLoading(false);
+      }
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [matchId]);
+
+  const frameCount = result?.frameCount ?? 0;
+
+  // 自动播放：按 speed 推进 cursor，到末尾自动停。
+  useEffect(() => {
+    if (!playing || frameCount === 0) return;
+    if (cursor >= frameCount - 1) {
+      setPlaying(false);
+      return;
+    }
+    const id = setTimeout(() => setCursor((c) => Math.min(frameCount - 1, c + 1)), Math.max(120, 1000 / speed));
+    return () => clearTimeout(id);
+  }, [playing, cursor, speed, frameCount]);
+
+  if (loading) return <p style={{ color: "#888" }}>重建回放中...</p>;
+  if (err) return <p style={{ color: "#c00" }}>回放加载失败：{err}</p>;
+  if (!result) return <p style={{ color: "#888" }}>无回放数据。</p>;
+  if (frameCount === 0) {
+    return <p style={{ color: "#888" }}>该对局暂无可回放事件。</p>;
+  }
+
+  const atStart = cursor <= -1;
+  const atEnd = cursor >= frameCount - 1;
+  const frame = cursor < 0 ? null : result.frames[cursor];
+  const view = frame ? frame.view : result.initialView;
+
+  const jump = (i: number) => {
+    setPlaying(false);
+    setCursor(Math.max(-1, Math.min(frameCount - 1, i)));
+  };
+
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.6rem" }}>
+      {/* 控制条 */}
+      <div style={{ display: "flex", gap: "0.4rem", alignItems: "center", flexWrap: "wrap" }}>
+        <button type="button" style={replayBtnStyle} disabled={atStart} onClick={() => jump(-1)}>
+          ⏮ 起点
+        </button>
+        <button type="button" style={replayBtnStyle} disabled={atStart} onClick={() => jump(cursor - 1)}>
+          ◀ 上一步
+        </button>
+        {playing ? (
+          <button type="button" style={replayBtnStyle} onClick={() => setPlaying(false)}>
+            ⏸ 暂停
+          </button>
+        ) : (
+          <button type="button" style={replayBtnStyle} disabled={atEnd} onClick={() => setPlaying(true)}>
+            ▶ 播放
+          </button>
+        )}
+        <button type="button" style={replayBtnStyle} disabled={atEnd} onClick={() => jump(cursor + 1)}>
+          下一步 ▶
+        </button>
+        <button type="button" style={replayBtnStyle} disabled={atEnd} onClick={() => jump(frameCount - 1)}>
+          ⏭ 末尾
+        </button>
+        <span style={{ marginLeft: 6, fontSize: "0.8rem", color: "#555" }}>速度</span>
+        {REPLAY_SPEEDS.map((s) => (
+          <button
+            key={s}
+            type="button"
+            style={{ ...replayBtnStyle, background: speed === s ? "#06c" : "#222" }}
+            onClick={() => setSpeed(s)}
+          >
+            {s}x
+          </button>
+        ))}
+      </div>
+
+      {/* 进度 */}
+      <input
+        type="range"
+        min={-1}
+        max={frameCount - 1}
+        value={cursor}
+        onChange={(e) => jump(Number(e.target.value))}
+        style={{ width: "100%" }}
+      />
+      <div style={{ fontSize: "0.8rem", color: "#555", fontFamily: "monospace" }}>
+        {cursor < 0
+          ? `起点（共 ${frameCount} 帧，seed=${result.initialSeed}）`
+          : `第 ${cursor + 1} / ${frameCount} 帧 · seq=${frame!.seq} · ${frame!.type}${
+              frame!.side != null ? ` (side ${frame!.side})` : ""
+            }`}
+        {frame?.error && <span style={{ color: "#c00" }}> · ⚠ {frame.error}</span>}
+      </div>
+
+      {/* 牌桌状态 */}
+      <div style={{ fontSize: "0.85rem", color: "#333" }}>
+        回合 {view.turnNumber} · 行动方 P{view.activePlayer + 1}
+        {view.ended && (
+          <span style={{ marginLeft: 8, color: "#1f7a36", fontWeight: 600 }}>
+            对局结束 · 胜者 {view.winner == null ? "—" : `P${view.winner + 1}`}
+          </span>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        {view.players.map((p) => (
+          <ReplayPlayerCard key={p.side} p={p} active={p.side === view.activePlayer} />
+        ))}
+      </div>
+
+      {/* 市场三栏 */}
+      <div style={{ display: "flex", gap: "0.75rem", flexWrap: "wrap" }}>
+        {view.market.map((lane) => (
+          <div key={lane.lane} style={replayLaneStyle}>
+            <div style={{ fontWeight: 600, color: "#06c", fontSize: "0.8rem" }}>
+              {lane.lane.toUpperCase()}
+            </div>
+            {lane.slots.map((s, i) => (
+              <div key={i} style={{ fontSize: "0.78rem", color: s ? "#333" : "#bbb" }}>
+                {s ? s.id : "（空）"}
+              </div>
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ReplayPlayerCard({ p, active }: { p: ReplayPlayer; active: boolean }) {
+  return (
+    <div
+      style={{
+        flex: "1 1 280px",
+        minWidth: 260,
+        border: `1px solid ${active ? "#06c" : "#e5e7ee"}`,
+        borderRadius: 8,
+        padding: "0.5rem 0.75rem",
+        background: active ? "#f0f6ff" : "#fff",
+        fontSize: "0.82rem",
+      }}
+    >
+      <div style={{ fontWeight: 600, marginBottom: 4 }}>
+        P{p.side + 1} · {p.name}
+        {active && <span style={{ color: "#06c", marginLeft: 6 }}>● 行动中</span>}
+      </div>
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontFamily: "monospace" }}>
+        <span>HP {p.hp}</span>
+        <span>防备 {p.block}</span>
+        <span>资源 {p.resourcePool}</span>
+        <span>攻击 {p.attackPool}</span>
+        <span style={{ color: "#888" }}>手 {p.handSize}</span>
+        <span style={{ color: "#888" }}>堆 {p.deckSize}</span>
+        <span style={{ color: "#888" }}>弃 {p.discardSize}</span>
+      </div>
+      {p.venues.length > 0 && (
+        <div style={{ marginTop: 4, color: "#555" }}>
+          场馆：
+          {p.venues.map((v, i) => (
+            <span key={i} style={{ marginRight: 8 }}>
+              {v.isGuard ? "🛡" : "🏛"} {v.cardId} ({v.durability}/{v.maxDurability})
+            </span>
+          ))}
+        </div>
+      )}
+      {p.scheduleSlots.some((s) => s) && (
+        <div style={{ marginTop: 2, color: "#555" }}>
+          日程：{p.scheduleSlots.map((s) => (s ? s.id : "空")).join(" · ")}
+        </div>
+      )}
+      {p.reservedCard && (
+        <div style={{ marginTop: 2, color: "#555" }}>预约：{p.reservedCard.id}</div>
+      )}
+      {p.pendingDiscardCount > 0 && (
+        <div style={{ marginTop: 2, color: "#a37300" }}>
+          下回合需弃 {p.pendingDiscardCount} 张
+        </div>
+      )}
+    </div>
+  );
+}
+
+const replayBtnStyle: React.CSSProperties = {
+  padding: "0.2rem 0.55rem",
+  background: "#222",
+  color: "#eee",
+  border: "1px solid #444",
+  borderRadius: 4,
+  cursor: "pointer",
+  fontSize: "0.8rem",
+};
+
+const replayLaneStyle: React.CSSProperties = {
+  flex: "1 1 160px",
+  minWidth: 140,
+  border: "1px solid #e5e7ee",
+  borderRadius: 6,
+  padding: "0.4rem 0.6rem",
+  background: "#fff",
+  display: "flex",
+  flexDirection: "column",
+  gap: 2,
+};
 
 const cellHead: React.CSSProperties = {
   padding: "0.5rem",

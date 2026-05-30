@@ -29,7 +29,7 @@ scripts/deploy.sh             # build + up -d
 | --- | --- |
 | 玩家主页面（lobby） | <http://${HOST}:3000> |
 | Colyseus 房间服务 | ws://${HOST}:3000/matchmake/* + ws://${HOST}:3000/<processId>/<roomId> *(经 nginx 同域反代)* |
-| 只读对局 API      | <http://${HOST}:3000/api/matches>、`/:id/events`、`/:id/metrics` *(经 nginx 同域反代)* |
+| 只读对局 API      | <http://${HOST}:3000/api/matches>、`/:id/events`、`/:id/metrics`、`/:id/replay`（逐帧牌桌投影）*(经 nginx 同域反代)* |
 | 只读卡牌 API      | <http://${HOST}:3000/api/cards> *(经 nginx 同域反代)* |
 | Server 健康检查   | <http://${HOST}:3000/health> *(经 nginx 同域反代)* |
 | 运营后台（Next.js）| <http://${HOST}:3000/admin> *(经 nginx 同域反代)* — 直连入口 <http://${HOST}:3001/admin> |
@@ -169,11 +169,13 @@ pnpm generate:card-catalog   # 产出 docs/card-catalog.generated.md
 当前 Docker 镜像启动即可玩的 MVP 功能：
 
 - 玩家主页面：快速匹配 / 创建房间 / 输入房号加入（含邀请链接 `?room=ABCD` 预填）
+- **新手教程**：首次进对局自动弹出 9 步图文引导，右上角「❔ 教程」随时重看
 - 1v1 房间匹配 + 服务端席位上限
-- 三栏市场 + 预约位 + 固定补给
+- 三栏市场 + 预约位 + 固定补给，**商店牌显示价格**（资源价签 + 稀有度配色 + 买不起置灰，预约位显示折后价）
 - 日程槽、场馆耐久、guard 优先攻击、压力机制
 - 60 秒断线重连
 - 事件流落库 → 后台查看 & 客户端回放入口
-- 运营后台：最近对局列表 + 事件流详情 + **卡牌管理**（按内容包 / lane / 稀有度 / 关键字筛选）
+- **逐帧牌桌回放**：`/api/matches/:id/replay` 把事件流投影成每帧 `PublicMatchView`，运营后台可逐帧复盘盘面
+- 运营后台：最近对局列表 + 指标看板 + 事件流筛选/导出 + **逐帧回放** + **卡牌管理**（按内容包 / lane / 稀有度 / 关键字筛选）
 
-当前仍为技术原型，不含观战、排位、社交、开包等扩展玩法。后续建议推进方向见 `docs/roadmap-next.md`。
+当前仍为技术原型，不含观战、排位、社交、开包等扩展玩法；账号系统与对战档案为下一阶段主线，详见 `docs/roadmap-next.md`（P3）。

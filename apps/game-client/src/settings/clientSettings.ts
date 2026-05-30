@@ -15,10 +15,13 @@ const STORAGE_KEY = "devCamCard_settings_v1";
 export interface ClientSettings {
   /** 是否在商店区显示卡牌预览（body 文案）。默认开启。 */
   showShopPreview: boolean;
+  /** 是否已看过新手教程。首次进入对局时若为 false 会自动弹出教程。默认 false。 */
+  tutorialSeen: boolean;
 }
 
 const DEFAULTS: ClientSettings = {
   showShopPreview: true,
+  tutorialSeen: false,
 };
 
 let cached: ClientSettings | null = null;
@@ -35,6 +38,10 @@ function readFromStorage(): ClientSettings {
         typeof parsed.showShopPreview === "boolean"
           ? parsed.showShopPreview
           : DEFAULTS.showShopPreview,
+      tutorialSeen:
+        typeof parsed.tutorialSeen === "boolean"
+          ? parsed.tutorialSeen
+          : DEFAULTS.tutorialSeen,
     };
   } catch {
     return { ...DEFAULTS };
