@@ -39,6 +39,8 @@ import {
 } from "../viewmodel/BoardViewModel";
 import type { CardTextEntry } from "../content/clientLocale";
 import { getCardConditions, type ConditionKey } from "../content/cardConditions";
+import { getCardCost, getCardRarity } from "../content/cardMeta";
+import { TutorialOverlay, readTutorialDom } from "./tutorial";
 import {
   getSettings,
   subscribeSettings,
@@ -73,6 +75,7 @@ interface DomRefs {
   roomCopy: HTMLButtonElement;
   turnStatus: HTMLElement;
   settingsToggle: HTMLButtonElement;
+  tutorialToggle: HTMLButtonElement;
   error: HTMLElement;
   opp: HTMLElement;
   me: HTMLElement;
@@ -112,6 +115,7 @@ function readDom(root: HTMLElement): DomRefs {
     roomCopy: $<HTMLButtonElement>("g-room-copy"),
     turnStatus: $("g-turn-status"),
     settingsToggle: $<HTMLButtonElement>("g-settings-toggle"),
+    tutorialToggle: $<HTMLButtonElement>("g-tutorial-toggle"),
     error: $("g-error"),
     opp: $("g-opp"),
     me: $("g-me"),
@@ -151,6 +155,11 @@ export class HtmlGameView {
   private recentEvents: MatchEvent[] = [];
   private settings: ClientSettings;
   private unsubscribeSettings: (() => void) | null = null;
+
+  /** 新手教程模态控制器（DOM 缺失时为 null，功能降级但不影响对局）。 */
+  private tutorial: TutorialOverlay | null = null;
+  /** 是否已在本视图生命周期内尝试过首进自动弹教程（避免每次 state 推送重复弹）。 */
+  private tutorialAutoChecked = false;
 
   /** 选择模式：玩家在选择面板里点过的实例 ID 集合。 */
   private choiceSelected = new Set<string>();
@@ -256,6 +265,17 @@ export class HtmlGameView {
         }
       });
     });
+
+    // 新手教程：右上角「❔ 教程」随时可重看。DOM 缺失时静默降级。
+    try {
+      this.tutorial = new TutorialOverlay(readTutorialDom(this.dom.view));
+      this.dom.tutorialToggle.addEventListener("click", () => {
+        this.tutorial?.open();
+      });
+    } catch (err) {
+      this.tutorial = null;
+      console.warn("[htmlGameView] 教程模块未挂载，已降级:", err);
+    }
 
     this.dom.settingsToggle.addEventListener("click", () => {
       this.dom.settingsModal.classList.remove("hidden");
@@ -395,6 +415,7 @@ export class HtmlGameView {
 
   private renderAll(): void {
     if (!this.view || !this.privateView) return;
+    this.maybeAutoOpenTutorial();
     const vm = buildBoardViewModel(
       this.view,
       this.privateView,
@@ -419,6 +440,18 @@ export class HtmlGameView {
     this.renderEvents();
     this.renderEndBanner(vm);
     this.renderChoice(vm);
+  }
+
+  /**
+   * 首次进入对局且未看过教程时，自动弹出新手教程一次。
+   * 只在本视图生命周期检查一次：之后即便重绘也不再打扰（重看走右上角按钮）。
+   */
+  private maybeAutoOpenTutorial(): void {
+    if (this.tutorialAutoChecked) return;
+    this.tutorialAutoChecked = true;
+    if (this.tutorial && !this.settings.tutorialSeen) {
+      this.tutorial.open();
+    }
   }
 
   // ── 条件状态条（手牌区上方） ────────────────────────────────────────────
@@ -650,15 +683,28 @@ export class HtmlGameView {
     reserved.innerHTML = "";
     reserved.classList.toggle("has", !!p.reservedCard);
     const r = document.createElement("span");
-    r.textContent = p.reservedCard
-      ? `预约位: [${vm.getCardName(p.reservedCard.id)}]`
-      : "预约位: [空]";
-    if (!p.reservedCard) r.style.color = "#555555";
+    if (p.reservedCard) {
+      const base = getCardCost(p.reservedCard.id);
+      const discounted = base === undefined ? undefined : Math.max(0, base - 1);
+      const priceLabel = discounted === undefined ? "" : `（${discounted} 资源）`;
+      r.textContent = `预约位: [${vm.getCardName(p.reservedCard.id)}]${priceLabel}`;
+    } else {
+      r.textContent = "预约位: [空]";
+      r.style.color = "#555555";
+    }
     reserved.appendChild(r);
     if (isMe && p.reservedCard && vm.isMyTurn) {
+      const base = getCardCost(p.reservedCard.id);
+      const discounted = base === undefined ? undefined : Math.max(0, base - 1);
+      const canAfford = discounted === undefined || vm.me.resourcePool >= discounted;
       const btn = document.createElement("button");
       btn.type = "button";
-      btn.textContent = "购买（折扣 1）";
+      btn.textContent =
+        discounted === undefined ? "购买（折扣 1）" : `购买 · ${discounted}（折扣 1）`;
+      btn.disabled = !canAfford;
+      if (!canAfford) {
+        btn.title = `资源不足（需 ${discounted}，现有 ${vm.me.resourcePool}）`;
+      }
       btn.addEventListener("click", () => {
         this.client.send({ type: CMD.BUY_RESERVED_CARD });
       });
@@ -703,14 +749,23 @@ export class HtmlGameView {
           continue;
         }
 
+        const cost = getCardCost(card.id);
+        const canAfford = cost === undefined || vm.me.resourcePool >= cost;
+
         const cardEl = document.createElement("div");
         cardEl.className = "market-card";
+        // 仅在我方回合按当前资源池标记"买不起"，避免对手回合（我方资源为 0）时整排变灰。
+        if (vm.isMyTurn && !canAfford) cardEl.classList.add("unaffordable");
         this.attachTooltip(cardEl, card.id);
 
+        const head = document.createElement("div");
+        head.className = "card-head";
         const name = document.createElement("div");
         name.className = "name";
         name.textContent = vm.getCardName(card.id);
-        cardEl.appendChild(name);
+        head.appendChild(name);
+        head.appendChild(makeCostBadge(cost, getCardRarity(card.id)));
+        cardEl.appendChild(head);
 
         if (previewOn) {
           const preview = document.createElement("div");
@@ -726,7 +781,9 @@ export class HtmlGameView {
           const buy = document.createElement("button");
           buy.type = "button";
           buy.className = "buy-btn";
-          buy.textContent = "购买";
+          buy.textContent = cost === undefined ? "购买" : `购买 · ${cost}`;
+          buy.disabled = !canAfford;
+          if (!canAfford) buy.title = `资源不足（需 ${cost}，现有 ${vm.me.resourcePool}）`;
           buy.addEventListener("click", () => {
             this.client.send({
               type: CMD.BUY_MARKET_CARD,
@@ -765,14 +822,22 @@ export class HtmlGameView {
     const previewOn = this.settings.showShopPreview;
     this.dom.fixed.innerHTML = "";
     for (const cardId of vm.fixedSupplies) {
+      const cost = getCardCost(cardId);
+      const canAfford = cost === undefined || vm.me.resourcePool >= cost;
+
       const card = document.createElement("div");
       card.className = "fixed-card";
+      if (vm.isMyTurn && !canAfford) card.classList.add("unaffordable");
       this.attachTooltip(card, cardId);
 
+      const head = document.createElement("div");
+      head.className = "card-head";
       const name = document.createElement("div");
       name.className = "name";
       name.textContent = `${vm.getCardName(cardId)}（无限）`;
-      card.appendChild(name);
+      head.appendChild(name);
+      head.appendChild(makeCostBadge(cost, getCardRarity(cardId)));
+      card.appendChild(head);
 
       if (previewOn) {
         const preview = document.createElement("div");
@@ -787,7 +852,9 @@ export class HtmlGameView {
         const buy = document.createElement("button");
         buy.type = "button";
         buy.className = "buy-btn";
-        buy.textContent = "购买";
+        buy.textContent = cost === undefined ? "购买" : `购买 · ${cost}`;
+        buy.disabled = !canAfford;
+        if (!canAfford) buy.title = `资源不足（需 ${cost}，现有 ${vm.me.resourcePool}）`;
         buy.addEventListener("click", () => {
           this.client.send({ type: CMD.BUY_FIXED_SUPPLY, cardId });
         });
@@ -1373,6 +1440,20 @@ export class HtmlGameView {
 
     this.dom.replayBody.appendChild(tbl);
   }
+}
+
+/**
+ * 价签元素：显示卡牌资源消耗。
+ * cost === undefined（规则数据缺失）时显示 "?"，避免把"未知"误显成 "0 费"。
+ * rarity 决定底色，强化稀有度直觉（common / uncommon / rare）。
+ */
+function makeCostBadge(cost: number | undefined, rarity?: string): HTMLSpanElement {
+  const badge = document.createElement("span");
+  badge.className = "cost-badge" + (rarity ? ` rarity-${rarity}` : "");
+  badge.textContent = cost === undefined ? "?" : String(cost);
+  badge.title = cost === undefined ? "价格未知" : `资源消耗：${cost}`;
+  badge.setAttribute("aria-label", cost === undefined ? "价格未知" : `资源消耗 ${cost}`);
+  return badge;
 }
 
 function makeStat(label: string, value: number, kind: string): HTMLSpanElement {

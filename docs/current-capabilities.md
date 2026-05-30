@@ -35,7 +35,8 @@
 - Prisma + PostgreSQL 持久化可用，含 Match / MatchPlayer / MatchEvent；已补齐 Match 创建与玩家/事件写入之间的时序等待，避免极端竞争下丢记录。
 - 提供只读 API：`/api/matches`、`/api/matches/:id`、`/api/matches/:id/events`、
   `/api/matches/:id/metrics`（对局指标聚合，纯函数从 matchEvent 流投影，覆盖
-  turns / durationMs / avgTurnMs / 双侧命令分布 + 攻击量分桶）。
+  turns / durationMs / avgTurnMs / 双侧命令分布 + 攻击量分桶）、
+  `/api/matches/:id/replay`（**逐帧牌桌投影**，见 7.2）。
 
 ### 6) 可见性与客户端
 - Public/Private 视图分层已落地。
@@ -46,6 +47,15 @@
   会蓝色高亮（已满足）/ 红色高亮（未满足），由
   `apps/game-client/src/content/cardConditions.ts` 在构建期从规则 JSON 投影出
   cardId → conditionKey 索引，零网络往返。
+- **商店卡牌价格显示**：三栏市场 / 固定补给 / 预约位均显示卡牌资源消耗价签
+  （含稀有度配色），买不起时整张牌变灰 + 购买按钮禁用；预约位显示折后价
+  （原价 -1，最低 0，与引擎 `BUY_RESERVED_CARD` 扣费口径一致）。价格由
+  `apps/game-client/src/content/cardMeta.ts` 在构建期从规则 JSON 投影
+  cardId → cost/rarity，与服务端 costMap 同源，"显示价 == 实际扣费价"。
+- **新手教程**：首次进入对局自动弹出 9 步图文引导（目标 / 资源面板 / 商店价格 /
+  预约 / 手牌打出 / 日程 / 场馆值守 / 攻击 / 回合流转），右上角「❔ 教程」随时重看；
+  `tutorialSeen` 落 localStorage，只首弹一次。控制层 `TutorialController` 为纯状态机，
+  与 DOM 层 `TutorialOverlay` 解耦，便于单测（`apps/game-client/src/game/tutorial.ts`）。
 
 ### 7) 可复现性基础（Mulberry32 seeded RNG）
 - 统一 RNG 模块：`packages/engine/src/rng.ts`（`createSeededRng` / `hashStringToSeed` / `createSeededIdFactory`）。
@@ -74,6 +84,24 @@
   - 空事件流、典型主链事件流（READY×2 + END_TURN×2）回放结果与直接 reduce 等价。
   - 单步出错被记录到 errors 但流程继续。
 
+### 7.2) 逐帧牌桌回放（P0-4 收尾：服务端投影 + admin 渲染）
+- 服务端新增纯函数 `apps/server/src/matchReplay.ts` 的 `buildReplayFrames`：
+  把 `replayFromEvents` 的逐帧 `InternalMatchState` 经 `toPublicMatchView` 投影成
+  对外安全的 `PublicMatchView`，输出 `initialView`（起点帧）+ `frames[]`
+  （每帧含 seq/type/side/error + 牌桌视图）+ `errors[]`。
+  - `initialSeed = hashStringToSeed(matchId)`，与 `GameRoom.onCreate` 在
+    "lobby 不传自定义 seed" 时一致，无需落库即可复现。
+  - 内容（ruleset / laneDefinitions / ENGINE_CONFIG）由新抽出的
+    `apps/server/src/content.ts` 统一加载，**与 live 对局同源**，并被 GameRoom 复用
+    （消除两处各自加载导致的漂移，启动期只解析一次）。
+- 只读 API `GET /api/matches/:id/replay` 返回上述帧序列（玩家名来自 MatchPlayer）。
+- admin 后台 `matches-dashboard` 每行新增「回放」按钮：逐帧浏览器
+  （⏮ 起点 / ◀ 上一步 / ▶ 播放 1x·2x·4x / 下一步 ▶ / ⏭ 末尾 + 进度滑杆），
+  渲染当前帧的牌桌状态（双方 HP / 防备 / 资源 / 攻击 / 手牌·牌堆·弃牌数 / 场馆耐久 /
+  日程 / 预约）+ 三栏市场槽位。运营据此可"逐帧看每一步之后的真实盘面"。
+- 测试：`apps/server/src/__tests__/matchReplay.test.ts`（6 条）覆盖空流 / READY×2 起局 /
+  bigint·string ts 兼容 / 缺 side 记错不中断 / 乱序按 seq 重排 / 同 matchId seed 稳定。
+
 ### 8) effect schema 收紧
 - `card-rule.schema.json` 中的 Effect 按 op 分支改为 `oneOf`，每支 `additionalProperties: false`。
 - 统一 `drawThenDiscard` 字段为 `drawCount / discardCount`（engine 与 data 同步）。
@@ -86,13 +114,15 @@
 - 日程槽“可安排对象、触发时机、客户端交互入口”的一致性仍需持续收敛。
 - 攻击分配 UI 仍偏 MVP：当前以“全力打脸 / 对单个场馆快捷攻击”两种快捷操作为主，尚未提供可视化多段拆分分配器。
 
-### 2) 可复现性（部分完成）
-- 基础 seeded RNG 已落地；引擎侧已实现 `replayFromEvents` / `buildReplayInitialState`
-  作为"逐事件重建状态"的原语；尚未完成的是把 UI 渲染层接上来（步进 / 自动播放 /
-  跳转控件目前仍是事件列表视图）。
-- 当前已满足“同 seed + 同命令流 → 引擎关键结果一致”，并能在引擎层从 snapshot
-  + event log 重建出每一帧 `InternalMatchState`；接下来只剩把这些帧投影到
-  渲染层（HtmlGameView 或 server-side snapshot 接口）。
+### 2) 可复现性（主链已闭环，玩家端为增量）
+- 基础 seeded RNG + 引擎 `replayFromEvents` / `buildReplayInitialState` 原语已落地。
+- **逐帧牌桌投影已闭环**：服务端 `buildReplayFrames` + `/api/matches/:id/replay`
+  把每帧 `InternalMatchState` 投影成 `PublicMatchView`，admin 后台已能逐帧渲染牌桌
+  （见 7.2）。”同 seed + 同命令流 → 逐帧盘面一致”已可在运营侧直接复盘。
+- 剩余增量（非主链阻塞）：玩家**对局内**「查看回放」模态目前仍是逐事件浏览器
+  （事件表格），尚未接同款逐帧牌桌渲染。两条路径二选一即可补齐：
+  (a) 客户端 hover 时直接调 `/api/matches/:roomId/replay` 渲染帧；
+  (b) 把引擎打进客户端 bundle 本地重建（会增大体积）。推荐 (a)。
 
 ### 3) 规则与数据约束（效果 schema 已收紧）
 - effect schema 已从松散 `additionalProperties: true` 改为按 op 的 `oneOf`；data 与 engine 的 `drawThenDiscard` 字段已统一。
@@ -107,8 +137,9 @@
   - 效果链路：`setFlag / gainFaceUpCard / queueDelayedDiscard / createPressure` 均可在对局中触发并结算。
 
 ### 5) 工具与产品化
-- 回放仍是骨架（以事件列表为主），非完整复盘播放器。下一步是"逐事件重建并渲染"。
-- admin 后台仍为壳，未形成实用运营视图。
+- 运营侧回放已升级为逐帧牌桌播放器（admin，见 7.2）；玩家对局内回放仍是事件浏览器（增量项，见上）。
+- admin 后台已具最近对局列表 + 指标看板 + 事件流筛选/导出 + 逐帧回放；
+  仍缺账号维度的对局检索与玩家画像（见 roadmap "账号系统与对战档案"）。
 
 ### 6) 客户端渲染层（HTML/CSS 重构）
 - 牌桌前端从 Phaser canvas 改为 HTML + CSS Grid（`htmlGameView.ts`）。

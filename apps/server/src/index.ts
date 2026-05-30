@@ -11,6 +11,8 @@ import {
   listRuleSets,
 } from "./cardCatalog";
 import { computeMatchMetrics } from "./matchMetrics";
+import { buildReplayFrames } from "./matchReplay";
+import { ruleset, laneDefinitions, ENGINE_CONFIG } from "./content";
 
 const port = Number(process.env.PORT ?? 2567);
 
@@ -188,6 +190,48 @@ app.get("/api/matches/:id/metrics", async (req, res) => {
   } catch (err) {
     console.error("[API] GET /api/matches/:id/metrics 失败:", err);
     res.status(500).json({ error: "查询失败" });
+  }
+});
+
+/**
+ * GET /api/matches/:id/replay
+ * 从事件流逐帧重建对局牌桌视图（P0-4 可复现回放的最后一步）。
+ *
+ * 与 /events 的区别：/events 只给"发生了什么命令"，/replay 给"每条命令之后的盘面"
+ * （PublicMatchView：HP / 资源 / 攻击 / 市场 / 场馆 / 日程 / 预约 / 胜负）。
+ *
+ * 复现前提：initialSeed = hashStringToSeed(matchId)，与对局创建时一致（lobby 不传
+ * 自定义 seed）。ruleset / laneDefinitions / engineConfig 由 content.ts 与 live 同源。
+ */
+app.get("/api/matches/:id/replay", async (req, res) => {
+  try {
+    const prisma = getPrisma();
+    const match = await prisma.match.findUnique({
+      where: { id: req.params.id },
+      include: { players: { orderBy: { side: "asc" } } },
+    });
+    if (!match) {
+      res.status(404).json({ error: "对局不存在" });
+      return;
+    }
+    const events = await prisma.matchEvent.findMany({
+      where: { matchId: req.params.id },
+      orderBy: { seq: "asc" },
+    });
+
+    const nameForSide = (s: number): string =>
+      match.players.find((p) => p.side === s)?.name ?? `玩家${s + 1}`;
+    const playerNames: [string, string] = [nameForSide(0), nameForSide(1)];
+
+    const result = buildReplayFrames(match.id, events, playerNames, {
+      ruleset,
+      laneDefinitions,
+      engineConfig: ENGINE_CONFIG,
+    });
+    res.json(result);
+  } catch (err) {
+    console.error("[API] GET /api/matches/:id/replay 失败:", err);
+    res.status(500).json({ error: "回放重建失败" });
   }
 });
 

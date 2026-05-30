@@ -429,9 +429,56 @@
         text-align: center;
         font-size: 11px;
       }
+      .card-head {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 6px;
+      }
       .market-card .name {
         color: #f5f5fa;
         font-weight: 500;
+      }
+      /* ── 价签 ───────────────────────────────────────────────────── */
+      .cost-badge {
+        flex-shrink: 0;
+        min-width: 18px;
+        height: 18px;
+        padding: 0 5px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1;
+        color: #ffe9b0;
+        background: #4a3a12;
+        border: 1px solid #6b5316;
+      }
+      .cost-badge.rarity-uncommon {
+        color: #c9e8ff;
+        background: #143047;
+        border-color: #2b5e84;
+      }
+      .cost-badge.rarity-rare {
+        color: #ffd9ff;
+        background: #3a1442;
+        border-color: #743089;
+      }
+      .market-card.unaffordable,
+      .fixed-card.unaffordable {
+        opacity: 0.55;
+      }
+      .market-card.unaffordable .cost-badge,
+      .fixed-card.unaffordable .cost-badge {
+        color: #ff9a9a;
+        background: #3a1414;
+        border-color: #6b1f1f;
+      }
+      .actions button:disabled {
+        opacity: 0.45;
+        cursor: not-allowed;
       }
       .market-card .preview {
         font-size: 10.5px;
@@ -692,6 +739,78 @@
       }
       .modal-card.large {
         min-width: min(640px, 90vw);
+      }
+      /* ── 新手教程模态 ───────────────────────────────────────────── */
+      .modal-card.tutorial-card {
+        min-width: min(460px, 92vw);
+        max-width: 520px;
+      }
+      .tutorial-dots {
+        display: flex;
+        gap: 6px;
+        justify-content: center;
+      }
+      .tutorial-dots .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: #3a3a5e;
+        transition: background 0.15s, transform 0.15s;
+      }
+      .tutorial-dots .dot.active {
+        background: #ffd86b;
+        transform: scale(1.25);
+      }
+      .tutorial-body {
+        font-size: 13.5px;
+        line-height: 1.6;
+        color: #d4d8ea;
+        max-height: 52vh;
+        overflow: auto;
+      }
+      .tutorial-body p {
+        margin: 0 0 8px;
+        white-space: pre-wrap;
+      }
+      .tutorial-body p.spacer {
+        margin: 0;
+        height: 4px;
+      }
+      .tutorial-nav {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+      }
+      .tutorial-nav button {
+        padding: 7px 16px;
+        font-size: 13px;
+        border-radius: 6px;
+      }
+      .tutorial-nav button.primary {
+        background: #2a5a2a;
+        color: #ddffdd;
+      }
+      .tutorial-nav button.secondary {
+        background: #222244;
+        color: #cccccc;
+      }
+      .tutorial-nav button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+      }
+      .tutorial-progress {
+        font-size: 12px;
+        color: #9aaecc;
+      }
+      .tutorial-skip {
+        align-self: center;
+        background: none;
+        border: none;
+        color: #7a7a9a;
+        font-size: 12px;
+        text-decoration: underline;
+        cursor: pointer;
       }
       .modal-card h3 {
         color: #ffd86b;
@@ -1073,6 +1192,7 @@
           <button id="g-room-copy" type="button" title="复制房号">📋 复制</button>
         </div>
         <div class="turn-status" id="g-turn-status">等待...</div>
+        <button id="g-tutorial-toggle" type="button" class="header-btn">❔ 教程</button>
         <button id="g-settings-toggle" type="button" class="header-btn">⚙ 设置</button>
       </header>
 
@@ -1157,6 +1277,20 @@
           <h3>对局回放（逐事件浏览器）</h3>
           <div id="g-replay-body"></div>
           <button class="close-btn" id="g-replay-close" type="button">关闭</button>
+        </div>
+      </div>
+
+      <div id="g-tutorial-modal" class="modal hidden">
+        <div class="modal-card tutorial-card">
+          <div id="g-tutorial-dots" class="tutorial-dots"></div>
+          <h3 id="g-tutorial-title"></h3>
+          <div id="g-tutorial-body" class="tutorial-body"></div>
+          <div class="tutorial-nav">
+            <button id="g-tutorial-prev" type="button" class="secondary">上一步</button>
+            <span id="g-tutorial-progress" class="tutorial-progress"></span>
+            <button id="g-tutorial-next" type="button" class="primary">下一步 ▶</button>
+          </div>
+          <button id="g-tutorial-skip" type="button" class="tutorial-skip">跳过教程</button>
         </div>
       </div>
 

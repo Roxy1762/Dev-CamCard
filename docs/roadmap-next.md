@@ -31,8 +31,15 @@
   - 当前 cursor 行高亮 + 已过事件淡化 + 进度条；点击任意行可直接跳转。
   - 控制层与 cursor 状态独立于事件渲染，后续把表格行替换为 `replayFromEvents`
     输出的 PublicMatchView 投影即可完成最终一步，不再需要动 UI 框架。
-- 下一步（剩余工作）：把"事件表格行" 替换为 `replayFromEvents` 输出的逐帧 state →
-  PublicMatchView / PrivatePlayerView 投影渲染（已知 cursor 后只需一次 reduce 链路）。
+- ✅ 本轮收尾：逐帧牌桌投影已在**服务端 + admin**闭环：
+  - `apps/server/src/matchReplay.ts` 的 `buildReplayFrames` 把每帧 state 经
+    `toPublicMatchView` 投影；`GET /api/matches/:id/replay` 对外提供帧序列。
+  - 内容加载抽到 `apps/server/src/content.ts`，GameRoom 与回放端点共用同一份
+    ruleset / laneDefinitions / ENGINE_CONFIG（消除 live↔replay 漂移）。
+  - admin `matches-dashboard` 新增「回放」逐帧浏览器（步进 / 1x·2x·4x / 进度滑杆 +
+    牌桌状态渲染）。
+- 剩余增量（降级为 P1）：玩家**对局内** HTML 回放模态仍是逐事件浏览器，
+  接 `/api/matches/:roomId/replay` 即可复用同款逐帧渲染（推荐，不增 bundle）。
 
 ### P0-5 schema 收紧
 - 收敛 effect union 与 schema 的一一对应关系。
@@ -76,6 +83,11 @@
 
 ### P2-2 客户端体验增强
 - ✅ 回放模态已落地"逐事件浏览器"控制层（详见 P0-4）。
+- ✅ **商店卡牌价格显示**：市场 / 固定补给 / 预约位显示资源价签（稀有度配色）、
+  买不起置灰禁用、预约位显示折后价；价格由 `content/cardMeta.ts` 构建期从规则 JSON
+  投影，与服务端 costMap 同源。
+- ✅ **新手教程**：首进自动弹 9 步图文引导 + 右上角随时重看 + `tutorialSeen` 记忆；
+  纯状态机 `TutorialController` 可单测。
 - 攻击、选择、日志与提示信息做统一可视反馈（CSS 动画 + 状态高亮）。
 - ✅ 手牌悬浮预览（hover 显示卡牌完整文案）—— 帮助玩家在打出前看清效果。
 - ✅ 机制条件状态条 —— 在手牌区上方实时显示"已安排 / 已预约 / 有场馆 / 有值守"
@@ -91,8 +103,39 @@
 - 方案备忘：[`docs/future-effects-layer.md`](./future-effects-layer.md)。
 
 ### P2-3 后台与运营支持
-- admin 补齐对局历史、事件检索、异常回放入口。
-- 为平衡与故障定位提供可用观察面板。
+- ✅ admin 已有最近对局列表 + 概览统计 + 指标看板（P1-3）+ 事件流类型筛选/JSON 导出。
+- ✅ admin 已接逐帧回放浏览器（消费 `/api/matches/:id/replay`，详见 P0-4 收尾）。
+- 下一步：账号维度的对局检索与玩家画像（依赖下方「账号系统与对战档案」）。
+
+## P3：账号系统与对战档案（下一阶段主线）
+
+> 背景：当前对局以临时 `playerName` 入座，对局记录（Match / MatchPlayer / MatchEvent）
+> 不绑定持久身份，因此无法做"我的战绩 / 胜率 / 历史回放"。回放主链已闭环（P0-4），
+> 这一阶段把"记录"升级为"可归属到账号的对战档案"。建议按下列步骤小步推进：
+
+### P3-1 持久账号最小实现
+- Prisma 新增 `User`（id / displayName / createdAt，可选 `authToken` 或后续接 OAuth）。
+- 客户端在 localStorage 持久化一个玩家身份（token + displayName），入座时随
+  `joinOptions.playerName` 一并带上 userId。
+- `MatchPlayer` 增加可空 `userId` 外键（兼容历史匿名对局）。
+- 迁移以**增量可空列**为主，避免破坏既有数据；保持匿名对局仍可进行。
+
+### P3-2 对战记录与账号关联
+- `GameRoom` 落库 MatchPlayer 时写入 userId；只读 API 增加
+  `GET /api/users/:id/matches`（某账号的对局列表 + 战绩聚合：场次/胜率/平均时长）。
+- 复用现有 `/api/matches/:id/replay` 做"我的对局逐帧回放"。
+- 玩家前端 lobby 增加"我的战绩"入口（列表 + 单局回放）。
+
+### P3-3 admin 账号运营视图
+- admin 增加账号列表 / 单账号画像（对局数、胜率、常用构筑信号）。
+- 把现有逐帧回放与指标看板按账号维度二次聚合。
+
+### P3-4 教程与可玩性收尾
+- 新手教程后续可叠加"指向真实元素"的高亮引导（在现模态轮播之上增量）。
+- 玩家对局内回放接 `/api/matches/:roomId/replay` 复用逐帧渲染（见 P0-4 剩余增量）。
+
+> 约束：账号系统属结构性改动（DB 迁移 + 认证），务必小步落地、先可空兼容匿名，
+> 每步同步更新本三件套文档与测试，避免一次性大改导致主链回归。
 
 ## 执行约束
 

@@ -1,6 +1,4 @@
 import { Room, Client } from "colyseus";
-import * as path from "path";
-import * as fs from "fs";
 import { EVT } from "@dev-camcard/protocol";
 import type {
   ClientCommand,
@@ -15,100 +13,19 @@ import {
   reduce,
   toPublicMatchView,
   toPrivatePlayerView,
-  resolveMarketCopiesByRarity,
 } from "@dev-camcard/engine";
-import type { InternalMatchState, RulesetConfig, EngineConfig, CardDef } from "@dev-camcard/engine";
-import {
-  loadRuleBatch,
-  assertRulesetDef,
-  type CardRuleData,
-} from "@dev-camcard/schemas";
+import type { InternalMatchState } from "@dev-camcard/engine";
 import { getPrisma } from "../prisma";
 import { Prisma } from "@prisma/client";
-
-// ── 数据加载（模块级，仅执行一次）────────────────────────────────────────────
-
-// __dirname 在 dev (tsx) 和 prod (dist/) 下均指向 src/rooms 或 dist/rooms，
-// 均距项目根目录 4 层，所以统一用 "../../../../"。
-const DATA_ROOT = path.resolve(__dirname, "../../../../");
-
-// v2 规则数据：从 data/cards/rules/ 加载，不含本地化文案
-const CONTENT_SETS = [
-  "data/cards/rules/starter.json",
-  "data/cards/rules/fixed-supplies.json",
-  "data/cards/rules/market-core.json",
-  "data/cards/rules/status.json",
-];
-
-const allRules: CardRuleData[] = loadRuleBatch(DATA_ROOT, CONTENT_SETS);
-
-// ruleset：从 data/rulesets/ 加载，并通过 AJV 校验
-function loadJson<T>(relativePath: string): T {
-  const fullPath = path.join(DATA_ROOT, relativePath);
-  return JSON.parse(fs.readFileSync(fullPath, "utf-8")) as T;
-}
-
-const RULESET_FILE = "data/rulesets/core-v1.json";
-const rulesetRaw: unknown = loadJson(RULESET_FILE);
-assertRulesetDef(rulesetRaw);
-const ruleset = rulesetRaw as RulesetConfig;
-
-// cardId → cost 查找表
-const costMap = new Map<string, number>();
-// cardId → CardDef 查找表（引擎只需要 id/type/abilities/isGuard/durability/activationsPerTurn/isPressure）
-const cardDefMap = new Map<string, CardDef>();
-
-for (const rule of allRules) {
-  costMap.set(rule.id, rule.cost);
-  cardDefMap.set(rule.id, {
-    id: rule.id,
-    type: rule.type,
-    // abilities 结构与引擎兼容：trigger/effects/condition 均保留
-    abilities: rule.abilities as CardDef["abilities"],
-    isGuard: rule.isGuard,
-    durability: rule.durability,
-    activationsPerTurn: rule.activationsPerTurn,
-    // isPressure：优先 JSON 字段，否则检查 tags 数组是否含 "pressure"
-    isPressure: rule.isPressure ?? rule.tags.includes("pressure"),
-  });
-}
-
-// 市场牌列表（来自 rules/market-core.json）
-const marketRules = allRules.filter(
-  (r) => !r.starter && !r.fixedSupply && !r.isPressure && !r.tags.includes("pressure")
-);
-
-const ENGINE_CONFIG: EngineConfig = {
+// 内容（规则 / ruleset / 引擎配置 / lane 定义）由 content.ts 统一加载，
+// 与只读回放端点共用同一份，确保 live 与回放重建逐字节一致。
+import {
   ruleset,
-  getCardCost: (cardId) => costMap.get(cardId) ?? 0,
-  getCardDef: (cardId) => cardDefMap.get(cardId),
-};
-
-/**
- * buildLaneDefinitions — 将市场牌规则按 lane 分组，返回引擎 createMarketState 所需格式。
- */
-function buildLaneDefinitions(
-  rules: CardRuleData[],
-  laneCount: number
-): Array<{ lane: "course" | "activity" | "daily"; cardIds: string[] }> {
-  const laneOrder = ["course", "activity", "daily"] as const;
-  const byLane: Record<string, string[]> = { course: [], activity: [], daily: [] };
-
-  for (const rule of rules) {
-    const lane = rule.lane;
-    if (lane in byLane) {
-      const copies = resolveMarketCopiesByRarity((rule as { rarity?: string }).rarity);
-      for (let i = 0; i < copies; i++) {
-        byLane[lane].push(rule.id);
-      }
-    }
-  }
-
-  return laneOrder.slice(0, laneCount).map((lane) => ({
-    lane,
-    cardIds: byLane[lane],
-  }));
-}
+  ENGINE_CONFIG,
+  laneDefinitions,
+  RULESET_VERSION,
+  CONTENT_SET_NAMES,
+} from "../content";
 
 // ── GameRoom ──────────────────────────────────────────────────────────────────
 
@@ -166,7 +83,6 @@ export class GameRoom extends Room {
       typeof seedInput === "string" ? hashStringToSeed(seedInput) : (seedInput | 0) >>> 0;
 
     // 与 replay.ts 共用同一条初始化路径，确保 live 与回放重建逐字节一致。
-    const laneDefinitions = buildLaneDefinitions(marketRules, ruleset.marketLanesCount);
     this.matchState = buildReplayInitialState({
       roomId: this.roomId,
       ruleset,
@@ -178,8 +94,8 @@ export class GameRoom extends Room {
     // 初始化快照元数据（含 seed，供回放重建使用）
     this.matchSnapshot = {
       matchId: this.roomId,
-      rulesetVersion: RULESET_FILE.replace("data/rulesets/", "").replace(".json", ""),
-      contentSets: CONTENT_SETS.map((p) => p.split("/").pop()!.replace(".json", "")),
+      rulesetVersion: RULESET_VERSION,
+      contentSets: CONTENT_SET_NAMES,
       startedAt: Date.now(),
       initialSeed,
     };
