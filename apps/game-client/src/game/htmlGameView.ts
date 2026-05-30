@@ -686,7 +686,9 @@ export class HtmlGameView {
     if (p.reservedCard) {
       const base = getCardCost(p.reservedCard.id);
       const discounted = base === undefined ? undefined : Math.max(0, base - 1);
-      const priceLabel = discounted === undefined ? "" : `（${discounted} 资源）`;
+      // 折后价仅对己方显示（折扣只有预约方能用）；对方预约位只露卡名。
+      const priceLabel =
+        isMe && discounted !== undefined ? `（${discounted} 资源）` : "";
       r.textContent = `预约位: [${vm.getCardName(p.reservedCard.id)}]${priceLabel}`;
     } else {
       r.textContent = "预约位: [空]";
