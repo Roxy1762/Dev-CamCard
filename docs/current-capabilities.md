@@ -102,6 +102,29 @@
 - 测试：`apps/server/src/__tests__/matchReplay.test.ts`（6 条）覆盖空流 / READY×2 起局 /
   bigint·string ts 兼容 / 缺 side 记错不中断 / 乱序按 seq 重排 / 同 matchId seed 稳定。
 
+### 7.3) 账号系统与对战档案（P3-1 / P3-2 最小实现）
+- **持久账号**：Prisma 新增 `User`（id / displayName / createdAt / lastSeenAt），
+  `MatchPlayer` 增加可空 `userId` 外键（`onDelete: SetNull`，历史匿名对局完全兼容）；
+  迁移 `20260610080000_add_user_accounts` 为增量可空列，不破坏既有数据。
+- **客户端身份**：`apps/game-client/src/identity/playerIdentity.ts` 首访生成 UUID 并
+  持久化在 localStorage（`devCamCard_userId`），之后入座随 joinOptions 恒定携带；
+  storage 不可用（隐私模式）时降级为会话级身份，不阻断联机。
+- **服务端归属**：`GameRoom.onJoin` 经 `normalizeUserId`（8~64 位字母/数字/连字符，
+  与路由层同口径）校验后 upsert `User`（displayName 跟随最近一次入座）并把 userId
+  写到 `MatchPlayer`；不合法 / 缺省一律按匿名对局处理。
+- **战绩 API**：`GET /api/users/:id/matches`（`apps/server/src/routes/users.ts`，
+  index.ts 与测试共用同一注册函数）返回账号信息 + 战绩聚合
+  （total / wins / losses / draws / ongoing / winRate / avgDurationMs，聚合逻辑为
+  纯函数 `buildUserMatchesSummary`，可脱离 DB 单测）+ 最近 50 场对局列表
+  （含 mySide / opponentName / result 胜负分类）。
+- **大厅「我的战绩」**：lobby 新增面板（`apps/game-client/src/lobby/matchHistory.ts`），
+  按需查询战绩 chips + 对局列表；每行「回放」按钮复用 `GET /api/matches/:id/replay`
+  打开逐帧浏览模态（⏮/◀/▶/⏭ 步进 + 双方盘面摘要），引擎不进客户端 bundle。
+- 测试：`apps/server/src/__tests__/users.test.ts`（校验口径 / 胜负分类 / 胜率与时长
+  聚合 / 脏数据防御 + DB-gated 路由集成）、`apps/game-client/src/__tests__/
+  playerIdentity.test.ts`（身份稳定 / 坏值自愈 / storage 降级）、
+  `matchHistory.test.ts`（结果徽章 / 时长 / chips / 帧摘要）。
+
 ### 8) effect schema 收紧
 - `card-rule.schema.json` 中的 Effect 按 op 分支改为 `oneOf`，每支 `additionalProperties: false`。
 - 统一 `drawThenDiscard` 字段为 `drawCount / discardCount`（engine 与 data 同步）。
@@ -139,7 +162,11 @@
 ### 5) 工具与产品化
 - 运营侧回放已升级为逐帧牌桌播放器（admin，见 7.2）；玩家对局内回放仍是事件浏览器（增量项，见上）。
 - admin 后台已具最近对局列表 + 指标看板 + 事件流筛选/导出 + 逐帧回放；
-  仍缺账号维度的对局检索与玩家画像（见 roadmap "账号系统与对战档案"）。
+  账号最小实现与玩家端"我的战绩"已落地（见 7.3），admin 侧账号列表 / 玩家画像
+  仍未开始（roadmap P3-3）。
+- 账号当前无认证：身份即 localStorage 里的 UUID，清空存储等于换新身份；
+  知道 userId 即可查其战绩（与 /api/matches 本就公开一致）。接 OAuth 前不应
+  在档案中暴露敏感信息。
 
 ### 6) 客户端渲染层（HTML/CSS 重构）
 - 牌桌前端从 Phaser canvas 改为 HTML + CSS Grid（`htmlGameView.ts`）。

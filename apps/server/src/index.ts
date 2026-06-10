@@ -12,6 +12,7 @@ import {
 } from "./cardCatalog";
 import { computeMatchMetrics } from "./matchMetrics";
 import { buildReplayFrames } from "./matchReplay";
+import { registerUserRoutes } from "./routes/users";
 import { ruleset, laneDefinitions, ENGINE_CONFIG } from "./content";
 
 const port = Number(process.env.PORT ?? 2567);
@@ -235,6 +236,10 @@ app.get("/api/matches/:id/replay", async (req, res) => {
   }
 });
 
+// ── 账号维度只读 API（P3-2 对战档案）────────────────────────────────────────────
+// GET /api/users/:id/matches — 账号信息 + 战绩聚合 + 对局列表（路由实现见 routes/users.ts）
+registerUserRoutes(app);
+
 // ── 卡牌内容只读 API（运营后台用） ─────────────────────────────────────────────
 
 const SUPPORTED_LOCALES = new Set<string>(listSupportedLocales());
@@ -297,7 +302,9 @@ function serializeMatch(m: MatchRow) {
     winner: m.winner,
     players:
       "players" in m
-        ? (m as MatchRow & { players: { id: number; side: number; name: string }[] }).players
+        ? (m as MatchRow & {
+            players: { id: number; side: number; name: string; userId: string | null }[];
+          }).players
         : undefined,
   };
 }

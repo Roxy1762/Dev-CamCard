@@ -176,6 +176,9 @@ pnpm generate:card-catalog   # 产出 docs/card-catalog.generated.md
 - 60 秒断线重连
 - 事件流落库 → 后台查看 & 客户端回放入口
 - **逐帧牌桌回放**：`/api/matches/:id/replay` 把事件流投影成每帧 `PublicMatchView`，运营后台可逐帧复盘盘面
+- **持久账号与我的战绩**：首访自动生成本机身份（localStorage UUID），对局自动归属；
+  大厅「我的战绩」面板展示胜率/场次/场均时长 + 最近对局列表，单局可逐帧回放
+  （`GET /api/users/:id/matches`）
 - 运营后台：最近对局列表 + 指标看板 + 事件流筛选/导出 + **逐帧回放** + **卡牌管理**（按内容包 / lane / 稀有度 / 关键字筛选）
 
-当前仍为技术原型，不含观战、排位、社交、开包等扩展玩法；账号系统与对战档案为下一阶段主线，详见 `docs/roadmap-next.md`（P3）。
+当前仍为技术原型，不含观战、排位、社交、开包等扩展玩法；账号当前无认证（清空浏览器存储等于换新身份），admin 账号画像为下一步（`docs/roadmap-next.md` P3-3）。
