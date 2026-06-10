@@ -9,6 +9,19 @@ datasource db {
   provider = "postgresql"
 }
 
+// ── 持久账号（P3-1 最小实现）──────────────────────────────────────────────────
+// id 由客户端生成并持久化在 localStorage（UUID），服务端在玩家入座时 upsert。
+// 当前阶段无认证（known-issues），后续接 OAuth 时在此追加凭据字段即可。
+
+model User {
+  id          String        @id               // 客户端生成的 UUID
+  displayName String                          // 最近一次入座使用的昵称
+  createdAt   DateTime      @default(now())
+  lastSeenAt  DateTime      @default(now())   // 最近一次入座时间
+
+  matchPlayers MatchPlayer[]
+}
+
 // ── 对局主记录 ────────────────────────────────────────────────────────────────
 
 model Match {
@@ -30,11 +43,14 @@ model MatchPlayer {
   matchId   String
   side      Int                                 // 0 | 1
   name      String
+  userId    String?                             // 可空：兼容历史匿名对局
 
   match     Match   @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  user      User?   @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@unique([matchId, side])
   @@index([matchId])
+  @@index([userId])
 }
 
 // ── 对局事件流 ────────────────────────────────────────────────────────────────

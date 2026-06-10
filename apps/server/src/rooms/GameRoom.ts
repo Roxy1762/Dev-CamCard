@@ -17,6 +17,7 @@ import {
 import type { InternalMatchState } from "@dev-camcard/engine";
 import { getPrisma } from "../prisma";
 import { Prisma } from "@prisma/client";
+import { normalizeUserId } from "../users";
 // 内容（规则 / ruleset / 引擎配置 / lane 定义）由 content.ts 统一加载，
 // 与只读回放端点共用同一份，确保 live 与回放重建逐字节一致。
 import {
@@ -137,7 +138,7 @@ export class GameRoom extends Room {
   }
 
   onJoin(client: Client, options: unknown): void {
-    const opts = (options ?? {}) as { playerName?: string };
+    const opts = (options ?? {}) as { playerName?: string; userId?: unknown };
     const side = (this.clients.length - 1) as PlayerSide;
     this.sideMap.set(client.sessionId, side);
 
@@ -148,9 +149,10 @@ export class GameRoom extends Room {
       ) as [typeof this.matchState.players[0], typeof this.matchState.players[1]];
       this.matchState = { ...this.matchState, players };
 
-      // 持久化玩家信息
+      // 持久化玩家信息（P3-1：userId 可空，不合法/缺省视为匿名对局）
       const playerName = opts.playerName ?? `玩家${side + 1}`;
-      void this.dbUpsertPlayer(side, playerName).catch((err) =>
+      const userId = normalizeUserId(opts.userId);
+      void this.dbUpsertPlayer(side, playerName, userId).catch((err) =>
         console.error("[GameRoom][DB] upsert MatchPlayer 失败:", err)
       );
     }
@@ -308,13 +310,27 @@ export class GameRoom extends Room {
     this.dbMatchCreated = true;
   }
 
-  private async dbUpsertPlayer(side: PlayerSide, name: string): Promise<void> {
+  private async dbUpsertPlayer(
+    side: PlayerSide,
+    name: string,
+    userId: string | null = null
+  ): Promise<void> {
     if (!(await this.ensureDbMatchCreated())) return;
     const prisma = getPrisma();
+
+    // 先确保账号存在（昵称跟随最近一次入座，便于"我的战绩"显示最新名字）。
+    if (userId) {
+      await prisma.user.upsert({
+        where: { id: userId },
+        create: { id: userId, displayName: name },
+        update: { displayName: name, lastSeenAt: new Date() },
+      });
+    }
+
     await prisma.matchPlayer.upsert({
       where: { matchId_side: { matchId: this.roomId, side } },
-      create: { matchId: this.roomId, side, name },
-      update: { name },
+      create: { matchId: this.roomId, side, name, userId },
+      update: { name, userId },
     });
   }
 

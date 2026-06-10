@@ -16,10 +16,23 @@
 import { RoomClient } from "../network/RoomClient";
 import { connectWithFallback, describeConnectError, type JoinAction } from "../network/connectFlow";
 import { copyTextToClipboard } from "./roomBadge";
+import { getOrCreateUserId } from "../identity/playerIdentity";
+import { initMatchHistory } from "./matchHistory";
 
 export type LobbyMode = "quick" | "create" | "join";
 
 const PLAYER_NAME_KEY = "devCamCard_playerName";
+
+/**
+ * 组装入座 joinOptions：userId 恒定携带（战绩归属），昵称可选（server 端兜底）。
+ * 导出纯函数便于单测。
+ */
+export function buildJoinOptions(
+  playerName: string | null,
+  userId: string
+): { playerName?: string; userId: string } {
+  return playerName ? { playerName, userId } : { userId };
+}
 
 interface LobbyDom {
   lobby: HTMLElement;
@@ -121,6 +134,17 @@ export function startLobby(opts: LobbyControllerOptions): void {
 
   dom.playerName.value = loadSavedName();
 
+  // 持久玩家身份（P3-1）：首访生成 UUID，之后入座恒定携带。
+  const userId = getOrCreateUserId();
+
+  // 「我的战绩」面板（P3-2）：按需查询 + 单局逐帧回放。
+  try {
+    initMatchHistory({ userId });
+  } catch (err) {
+    // 面板 DOM 缺失不应阻断联机主链（例如旧版 index.html 缓存）。
+    console.warn("[lobby] 战绩面板初始化失败:", err);
+  }
+
   // 若 URL 带 ?room=ABCD 则预填房号，方便邀请链接直接 paste。
   const params = new URLSearchParams(window.location.search);
   const presetRoom = params.get("room");
@@ -167,13 +191,13 @@ export function startLobby(opts: LobbyControllerOptions): void {
 
   dom.quickBtn.addEventListener("click", () => {
     void launch("quick", (client) =>
-      client.joinOrCreate("game_room", playerName() ? { playerName: playerName() } : {})
+      client.joinOrCreate("game_room", buildJoinOptions(playerName(), userId))
     );
   });
 
   dom.createBtn.addEventListener("click", () => {
     void launch("create", async (client) => {
-      await client.create("game_room", playerName() ? { playerName: playerName() } : {});
+      await client.create("game_room", buildJoinOptions(playerName(), userId));
       const id = client.roomId;
       if (id) {
         dom.createdRoomId.textContent = id;
@@ -209,7 +233,7 @@ export function startLobby(opts: LobbyControllerOptions): void {
       return;
     }
     void launch("join", (client) =>
-      client.joinById(roomId, playerName() ? { playerName: playerName() } : {})
+      client.joinById(roomId, buildJoinOptions(playerName(), userId))
     );
   });
 

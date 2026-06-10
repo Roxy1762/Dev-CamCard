@@ -114,17 +114,26 @@
 > 这一阶段把"记录"升级为"可归属到账号的对战档案"。建议按下列步骤小步推进：
 
 ### P3-1 持久账号最小实现
-- Prisma 新增 `User`（id / displayName / createdAt，可选 `authToken` 或后续接 OAuth）。
-- 客户端在 localStorage 持久化一个玩家身份（token + displayName），入座时随
-  `joinOptions.playerName` 一并带上 userId。
-- `MatchPlayer` 增加可空 `userId` 外键（兼容历史匿名对局）。
-- 迁移以**增量可空列**为主，避免破坏既有数据；保持匿名对局仍可进行。
+- ✅ Prisma 新增 `User`（id / displayName / createdAt / lastSeenAt），
+  `MatchPlayer` 增加可空 `userId` 外键（`onDelete: SetNull`）；迁移
+  `20260610080000_add_user_accounts` 为增量可空列，历史匿名对局完全兼容。
+- ✅ 客户端 `identity/playerIdentity.ts`：首访生成 UUID 持久化在 localStorage
+  （`devCamCard_userId`），入座 joinOptions 恒定携带；隐私模式降级为会话级身份。
+- ✅ 服务端 `normalizeUserId`（GameRoom 与路由层共用口径）：不合法 / 缺省一律按
+  匿名对局处理，不阻断入座。
+- 后续（接 OAuth 时）：在 `User` 上追加凭据字段并收紧战绩查询权限即可，
+  身份来源只需替换 `playerIdentity` 模块。
 
 ### P3-2 对战记录与账号关联
-- `GameRoom` 落库 MatchPlayer 时写入 userId；只读 API 增加
-  `GET /api/users/:id/matches`（某账号的对局列表 + 战绩聚合：场次/胜率/平均时长）。
-- 复用现有 `/api/matches/:id/replay` 做"我的对局逐帧回放"。
-- 玩家前端 lobby 增加"我的战绩"入口（列表 + 单局回放）。
+- ✅ `GameRoom.onJoin` upsert `User`（displayName 跟随最近入座）并把 userId 写入
+  MatchPlayer；只读 API `GET /api/users/:id/matches` 已上线
+  （`routes/users.ts` 注册函数被 index.ts 与集成测试共用，聚合逻辑为纯函数
+  `buildUserMatchesSummary`：场次 / 胜 / 负 / 平 / 进行中 / 胜率 / 平均时长）。
+- ✅ lobby 新增「我的战绩」面板（`lobby/matchHistory.ts`）：战绩 chips + 最近 50 场
+  列表；每行「回放」复用 `GET /api/matches/:id/replay` 打开逐帧浏览模态
+  （⏮/◀/▶/⏭ + 双方盘面摘要），引擎不进客户端 bundle。
+- 后续小步：战绩列表分页 / 按结果筛选；大厅回放从“盘面摘要”升级为完整牌桌渲染
+  （与对局内回放增量 P3-4 合并做，复用同一渲染器）。
 
 ### P3-3 admin 账号运营视图
 - admin 增加账号列表 / 单账号画像（对局数、胜率、常用构筑信号）。
